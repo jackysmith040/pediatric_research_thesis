@@ -9,17 +9,28 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=manrope:400,500,600,700|noto-serif:400,700" rel="stylesheet" />
         
-        <!-- Tailwind CDN for MVP (Bypass NPM requirement) -->
-        <script src="https://cdn.tailwindcss.com"></script>
-        
-        <!-- WebSockets via CDN (Bypass NPM requirement) -->
-        <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
-        
         <!-- Livewire Styles/Scripts -->
         @livewireStyles
+        
+        <!-- Vite Assets -->
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="antialiased bg-[#0e0e0e] text-white selection:bg-indigo-500/30">
         {{ $slot }}
         @livewireScripts
+        
+        <!-- Fire Alpine Events for Echo Connection Status -->
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                if (window.Echo) {
+                    window.Echo.connector.pusher.connection.bind('connected', () => {
+                        window.dispatchEvent(new Event('echo-connected'));
+                    });
+                    window.Echo.connector.pusher.connection.bind('disconnected', () => {
+                        window.dispatchEvent(new Event('echo-disconnected'));
+                    });
+                }
+            });
+        </script>
     </body>
 </html>

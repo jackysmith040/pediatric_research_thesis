@@ -11,12 +11,15 @@
             <h1 class="text-xl font-bold font-['Noto_Serif'] text-white tracking-tight">Pediatric Tracker</h1>
         </div>
         <div class="flex items-center gap-4 text-sm font-semibold tracking-wider text-neutral-400">
-            <span class="flex items-center gap-2">
+            <span x-data="{ connected: false }" 
+                  @echo-connected.window="connected = true" 
+                  @echo-disconnected.window="connected = false"
+                  class="flex items-center gap-2">
                 <span class="relative flex h-3 w-3">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  <span x-show="connected" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3" :class="connected ? 'bg-emerald-500' : 'bg-red-500'"></span>
                 </span>
-                LIVE WEBSOCKET
+                <span x-text="connected ? 'LIVE WEBSOCKET' : 'DISCONNECTED'"></span>
             </span>
         </div>
     </nav>

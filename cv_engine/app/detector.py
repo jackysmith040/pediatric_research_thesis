@@ -3,6 +3,8 @@ import os
 import logging
 import numpy as np
 import torch
+import threading
+import time
 import ultralytics.nn.tasks
 from collections import defaultdict
 from ultralytics import YOLO
@@ -42,6 +44,12 @@ class Detector:
         if not self.cap.isOpened():
             logger.error(f"Failed to open video source: {source}")
 
+        # Threading for real-time unbuffered frames
+        self.latest_frame = None
+        self.running = True
+        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.thread.start()
+
         # Store model class names for display
         self.names = self.model.names
 
@@ -54,6 +62,15 @@ class Detector:
         self.margin = 10
         self.circle_thickness = 5
         self.polyline_thickness = 2
+
+    def _capture_loop(self):
+        """Continuously drain the buffer to ensure we always have the absolute latest frame."""
+        while self.running and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                self.latest_frame = frame
+            else:
+                time.sleep(0.01)
 
     def draw_bbox(self, frame, box, track_id, class_id):
         """Draw bounding box with label at TOP-LEFT, TEXT CENTERED in its box."""
@@ -140,11 +157,13 @@ class Detector:
         """
         Yields MJPEG encoded frames with bounding boxes.
         """
-        while self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if not ret:
-                logger.warning("Failed to read frame from video source.")
-                break
+        while self.running:
+            if self.latest_frame is None:
+                time.sleep(0.1)
+                continue
+            
+            # Copy frame to prevent thread race conditions
+            frame = self.latest_frame.copy()
             
             # Clean expired IDs from memory
             self.counter.tracker_manager.clean_expired_ids()
@@ -199,5 +218,8 @@ class Detector:
             yield frame_bytes
 
     def release(self):
+        self.running = False
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join(timeout=1.0)
         if self.cap.isOpened():
             self.cap.release()
