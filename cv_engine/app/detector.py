@@ -149,13 +149,15 @@ class Detector:
             # Clean expired IDs from memory
             self.counter.tracker_manager.clean_expired_ids()
 
-            # Run YOLO tracking
+            # Run YOLO tracking with performance optimizations
             results = self.model.track(
                 frame, 
                 persist=True, 
                 tracker=settings.TRACKER_CONFIG,
                 conf=settings.CONFIDENCE_THRESHOLD,
                 iou=settings.IOU_THRESHOLD,
+                imgsz=480,       # Reduce internal processing resolution
+                vid_stride=2,    # Skip frames to eliminate lag
                 verbose=False
             )
 

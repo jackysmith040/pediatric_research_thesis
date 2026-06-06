@@ -30,7 +30,7 @@
                 <!-- Video Header -->
                 <div class="px-6 py-4 border-b border-[#262626] bg-[#1a1a1a]/50 flex justify-between items-center">
                     <h2 class="text-sm font-semibold text-neutral-300 uppercase tracking-widest">Outpatient Waiting Area CCTV</h2>
-                    <span class="text-xs text-neutral-500">Port 5001 • YOLOv8n</span>
+                    <span class="text-xs text-neutral-500">Port 5001 • YOLO26n</span>
                 </div>
                 
                 <!-- MJPEG Stream Container -->

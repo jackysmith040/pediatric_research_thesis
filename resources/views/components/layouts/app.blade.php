@@ -12,6 +12,9 @@
         <!-- Tailwind CDN for MVP (Bypass NPM requirement) -->
         <script src="https://cdn.tailwindcss.com"></script>
         
+        <!-- WebSockets via CDN (Bypass NPM requirement) -->
+        <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+        
         <!-- Livewire Styles/Scripts -->
         @livewireStyles
     </head>
