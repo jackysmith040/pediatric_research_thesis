@@ -1,58 +1,37 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# The Invisible Child: Pediatric Intelligence
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A dual-stack clinical intelligence system connecting a Python FastAPI YOLOv8 engine to a Laravel 13 Dashboard. It counts adults and children in a waiting room and displays it via a real-time Livewire UI.
 
-## About Laravel
+## Overview
+This system acts as an "unsleeping eye" for high-stakes clinical environments like pediatric Emergency Rooms. The core architecture ensures that the intensive CV processing is completely decoupled from the real-time UI, resulting in a zero-latency video feed while metrics update in parallel via Laravel Reverb WebSockets.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Architecture & Flow
+1. **CV Engine (Python/FastAPI):**
+   - Connects to an IP camera or webcam stream.
+   - Runs a highly optimized `threading` architecture where the raw video frame buffer is streamed instantly, while YOLOv8 processes objects in a separate background thread.
+   - Posts telemetry payload (`current_adults`, `current_children`) to the Laravel Backend every 3 seconds.
+2. **Backend (Laravel 13):**
+   - Ingests telemetry via REST API and stores it in SQLite (`traffic_logs`).
+   - Instantly broadcasts an event (`TelemetryReceived`) to the frontend using Laravel Reverb (`echo:telemetry`).
+3. **Frontend (Livewire 4 + Alpine.js + TailwindCSS v4):**
+   - Subscribes to the Reverb WebSocket to update the "Command Center" dashboard dynamically.
+   - Uses `#[Isolate]` (Livewire Islands) so that telemetry data can update instantly without causing the entire video feed UI to freeze or re-render.
+   - Includes graceful degradation states (Offline badges) if the CV Engine or Reverb server crashes.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Quick Start
+1. **Start the Laravel Server (Herd):**
+   The application is served at `http://pediatric-dashboard.test` via Laravel Herd.
+2. **Start Laravel Reverb:**
+   ```bash
+   php artisan reverb:start
+   ```
+3. **Start the CV Engine:**
+   ```bash
+   cd cv_engine
+   source .venv/bin/activate
+   uvicorn app.main:app --host 127.0.0.1 --port 5001 --reload
+   ```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
-```
-
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Documentation
+- Read the detailed architecture decisions in `docs/architecture.md`.
+- Original project scope and alignment can be found in `project-plan/`.
