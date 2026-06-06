@@ -1,7 +1,8 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Livewire\Dashboard\WaitRoomMonitor;
+use App\Livewire\LandingPage;
+use Illuminate\Support\Facades\Route;
 
-Route::get('/', WaitRoomMonitor::class);
-
+Route::livewire('/', LandingPage::class);
+Route::livewire('/dashboard', WaitRoomMonitor::class);

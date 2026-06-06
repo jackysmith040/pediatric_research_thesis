@@ -41,14 +41,24 @@ class Detector:
             source = int(source)
             
         self.cap = cv2.VideoCapture(source)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Prevent 3-5 frame latency buildup
+        
         if not self.cap.isOpened():
             logger.error(f"Failed to open video source: {source}")
 
-        # Threading for real-time unbuffered frames
+        # Threading for Decoupled Architecture
         self.latest_frame = None
+        self.latest_boxes = []
+        self.box_lock = threading.Lock()
         self.running = True
-        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self.thread.start()
+        
+        # Thread 1: Camera Capture
+        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.capture_thread.start()
+
+        # Thread 2: YOLO Inference
+        self.yolo_thread = threading.Thread(target=self._yolo_loop, daemon=True)
+        self.yolo_thread.start()
 
         # Store model class names for display
         self.names = self.model.names
@@ -70,7 +80,44 @@ class Detector:
             if ret:
                 self.latest_frame = frame
             else:
+                time.sleep(0.005)
+
+    def _yolo_loop(self):
+        """Continuously run YOLO inference on the latest frame without blocking the video stream."""
+        while self.running:
+            if self.latest_frame is None:
                 time.sleep(0.01)
+                continue
+                
+            frame = self.latest_frame.copy()
+            
+            # Clean expired IDs from memory
+            self.counter.tracker_manager.clean_expired_ids()
+
+            # Run YOLO tracking
+            results = self.model.track(
+                frame, 
+                persist=True, 
+                tracker=settings.TRACKER_CONFIG,
+                conf=settings.CONFIDENCE_THRESHOLD,
+                iou=settings.IOU_THRESHOLD,
+                imgsz=480,
+                verbose=False
+            )
+
+            new_boxes = []
+            if results and results[0].boxes and results[0].boxes.id is not None:
+                boxes = results[0].boxes.xyxy.cpu()
+                track_ids = results[0].boxes.id.int().cpu().tolist()
+                class_ids = results[0].boxes.cls.int().cpu().tolist()
+                
+                for box, track_id, class_id in zip(boxes, track_ids, class_ids):
+                    if class_id in [settings.ADULT_CLASS_ID, settings.CHILD_CLASS_ID]:
+                        self.counter.process_detection(track_id, class_id)
+                        new_boxes.append((box, track_id, class_id))
+            
+            with self.box_lock:
+                self.latest_boxes = new_boxes
 
     def draw_bbox(self, frame, box, track_id, class_id):
         """Draw bounding box with label at TOP-LEFT, TEXT CENTERED in its box."""
@@ -155,45 +202,21 @@ class Detector:
 
     def get_frame_generator(self) -> Generator[bytes, None, None]:
         """
-        Yields MJPEG encoded frames with bounding boxes.
+        Yields MJPEG encoded frames with bounding boxes. Runs at high FPS independently of YOLO.
         """
         while self.running:
             if self.latest_frame is None:
-                time.sleep(0.1)
+                time.sleep(0.01)
                 continue
             
-            # Copy frame to prevent thread race conditions
             frame = self.latest_frame.copy()
             
-            # Clean expired IDs from memory
-            self.counter.tracker_manager.clean_expired_ids()
-
-            # Run YOLO tracking with performance optimizations
-            results = self.model.track(
-                frame, 
-                persist=True, 
-                tracker=settings.TRACKER_CONFIG,
-                conf=settings.CONFIDENCE_THRESHOLD,
-                iou=settings.IOU_THRESHOLD,
-                imgsz=480,       # Reduce internal processing resolution
-                vid_stride=2,    # Skip frames to eliminate lag
-                verbose=False
-            )
-
-            if results and results[0].boxes and results[0].boxes.id is not None:
-                boxes = results[0].boxes.xyxy.cpu()
-                track_ids = results[0].boxes.id.int().cpu().tolist()
-                class_ids = results[0].boxes.cls.int().cpu().tolist()
+            with self.box_lock:
+                current_boxes = list(self.latest_boxes)
                 
-                for box, track_id, class_id in zip(boxes, track_ids, class_ids):
-                    # We only care about configured adult/child classes
-                    if class_id in [settings.ADULT_CLASS_ID, settings.CHILD_CLASS_ID]:
-                        # Process logic to update counts
-                        self.counter.process_detection(track_id, class_id)
-                        
-                        # Draw bounding box and tracking trail
-                        self.draw_bbox(frame, box, track_id, class_id)
-                        self.draw_trail(frame, box, track_id, class_id)
+            for box, track_id, class_id in current_boxes:
+                self.draw_bbox(frame, box, track_id, class_id)
+                self.draw_trail(frame, box, track_id, class_id)
             
             # Overlay Counting Logic
             cv2.putText(frame, f"Adults (Current): {self.counter.current_adults}", (10, 30),
@@ -210,16 +233,21 @@ class Detector:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 3)
 
             # Encode frame to JPEG
-            ret, buffer = cv2.imencode('.jpg', frame)
+            ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
             if not ret:
                 continue
             
             frame_bytes = buffer.tobytes()
             yield frame_bytes
+            
+            # Cap the stream itself to roughly 30 FPS to save bandwidth
+            time.sleep(1 / 30)
 
     def release(self):
         self.running = False
-        if hasattr(self, 'thread') and self.thread.is_alive():
-            self.thread.join(timeout=1.0)
+        if hasattr(self, 'capture_thread') and self.capture_thread.is_alive():
+            self.capture_thread.join(timeout=1.0)
+        if hasattr(self, 'yolo_thread') and self.yolo_thread.is_alive():
+            self.yolo_thread.join(timeout=1.0)
         if self.cap.isOpened():
             self.cap.release()
