@@ -2,11 +2,11 @@
 
 namespace App\Restify;
 
+use App\Events\TelemetryReceived;
 use App\Models\TrafficLog;
+use Binaryk\LaravelRestify\Fields\Id;
 use Binaryk\LaravelRestify\Http\Requests\RestifyRequest;
 use Binaryk\LaravelRestify\Repositories\Repository;
-use Binaryk\LaravelRestify\Fields\field;
-use Binaryk\LaravelRestify\Fields\Id;
 use Illuminate\Support\Facades\Event;
 
 class TrafficLogRepository extends Repository
@@ -29,6 +29,6 @@ class TrafficLogRepository extends Repository
     public static function stored(RestifyRequest $request, $repository)
     {
         // Broadcast the telemetry event via Reverb WebSockets
-        broadcast(new \App\Events\TelemetryReceived($repository->model()->toArray()))->toOthers();
+        broadcast(new TelemetryReceived($repository->model()->toArray()))->toOthers();
     }
 }

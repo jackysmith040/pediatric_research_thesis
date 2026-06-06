@@ -3,20 +3,34 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{{ $title ?? 'Pediatric Dashboard' }}</title>
+        <title>{{ $title ?? 'The Invisible Child | Pediatric Intelligence' }}</title>
+        <meta name="description" content="{{ $description ?? 'An unsleeping eye for high-stakes clinical environments. Ensuring no child is forgotten in the chaos of the ER.' }}">
         
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=manrope:400,500,600,700|noto-serif:400,700" rel="stylesheet" />
         
-        <!-- Tailwind CDN for MVP (Bypass NPM requirement) -->
-        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- Livewire Styles (Auto-injected in v4) -->
         
-        <!-- Livewire Styles/Scripts -->
-        @livewireStyles
+        <!-- Vite Assets -->
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="antialiased bg-[#0e0e0e] text-white selection:bg-indigo-500/30">
         {{ $slot }}
-        @livewireScripts
+        
+
+        <!-- Fire Alpine Events for Echo Connection Status -->
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                if (window.Echo) {
+                    window.Echo.connector.pusher.connection.bind('connected', () => {
+                        window.dispatchEvent(new Event('echo-connected'));
+                    });
+                    window.Echo.connector.pusher.connection.bind('disconnected', () => {
+                        window.dispatchEvent(new Event('echo-disconnected'));
+                    });
+                }
+            });
+        </script>
     </body>
 </html>

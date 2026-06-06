@@ -12,12 +12,15 @@ class TrafficLog extends Model
     protected $guarded = [];
 
     /**
-     * The attributes that should be cast.
+     * Get the attributes that should be cast.
      *
-     * @var array
+     * @return array<string, string>
      */
-    protected $casts = [
-        'overcrowding_alert' => 'boolean',
-        'recorded_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'overcrowding_alert' => 'boolean',
+            'recorded_at' => 'datetime',
+        ];
+    }
 }

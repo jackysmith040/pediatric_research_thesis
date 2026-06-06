@@ -8,8 +8,8 @@ class Settings(BaseSettings):
     IOU_THRESHOLD: float = float(os.getenv("IOU_THRESHOLD", "0.4"))
     
     # Tracking Configuration
-    TRACKER_CONFIG: str = os.getenv("TRACKER_CONFIG", "botsort.yaml")
-    ID_EXPIRY_SECONDS: int = int(os.getenv("ID_EXPIRY_SECONDS", "5"))
+    TRACKER_CONFIG: str = os.getenv("TRACKER_CONFIG", "bytetrack.yaml")
+    ID_EXPIRY_SECONDS: int = int(os.getenv("ID_EXPIRY_SECONDS", "30"))
 
     # Video Feed Configuration
     # Defaults to local webcam (0)

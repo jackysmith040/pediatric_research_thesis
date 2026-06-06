@@ -4,11 +4,12 @@ Update this file after every meaningful implementation change.
 
 ## Current Phase
 
-- [Complete] Phase 2: Python CV Engine Adaptation
+- [x] Phase 2: Python CV Engine Adaptation
+- [/] Phase 3: Automatically generate daily capacity PDFs
 
 ## Current Goal
 
-- Connecting FastAPI CV engine to Laravel Restify Telemetry Webhooks
+- Implement automated daily capacity PDF generation in Laravel.
 
 ## GitHub
 
@@ -19,18 +20,16 @@ Update this file after every meaningful implementation change.
 
 - Phase 1: Laravel Dashboard & Architecture (Livewire, Reverb, Restify, Models)
 - Phase 2: Python CV Engine Adaptation (FastAPI telemetry thread injected, env setup)
+- Verification: End-to-end local testing (Python -> Laravel API -> Livewire UI -> MJPEG Stream)
 
 ## In Progress
 
-- Verification / End-to-end local testing
+- Phase 3: Daily Capacity PDF Generation
 
 ## Next Up
 
-- Run the full pipeline (Python -> Laravel -> UI) and verify dashboard updating.
-
-## Open Questions
-
-- Ensure camera port 5000 doesn't conflict.
+- Create PDF Generation Job/Command in Laravel.
+- Configure Laravel Scheduler for nightly dispatch.
 
 ## Session Notes
 
