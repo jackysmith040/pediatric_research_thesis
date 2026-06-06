@@ -7,8 +7,8 @@ This document outlines the core architecture and development methodology for **T
 To balance clinical-grade computer vision performance with an accessible web-based administrative dashboard, the system is split into two specialized stacks:
 
 ### 1. CV Engine (Python / FastAPI)
-- **Why Python?** Python is the industry standard for neural network execution. We utilize `YOLOv8` (via the Ultralytics library) for high-accuracy pediatric vs. adult classification and bounding-box tracking.
-- **Threading Strategy (Zero-Latency):** A standard synchronous OpenCV loop blocks the video feed every time YOLOv8 runs inference, causing significant stutter on IP Cameras. We implemented a decoupled thread pattern where the *camera capture thread* continuously drains the buffer (`CAP_PROP_BUFFERSIZE = 1`) to ensure the absolute most recent frame is captured. The *inference thread* runs in parallel, overlaying the latest available data onto the stream. This provides a flawless 30 FPS video feed regardless of inference speeds.
+- **Why Python?** Python is the industry standard for neural network execution. We utilize `YOLOv26` (via the Ultralytics library) for high-accuracy pediatric vs. adult classification and bounding-box tracking.
+- **Threading Strategy (Zero-Latency):** A standard synchronous OpenCV loop blocks the video feed every time YOLOv26 runs inference, causing significant stutter on IP Cameras. We implemented a decoupled thread pattern where the *camera capture thread* continuously drains the buffer (`CAP_PROP_BUFFERSIZE = 1`) to ensure the absolute most recent frame is captured. The *inference thread* runs in parallel, overlaying the latest available data onto the stream. This provides a flawless 30 FPS video feed regardless of inference speeds.
 - **REST Telemetry:** The Python engine acts as an HTTP client, posting counting metrics to the Laravel API every 3 seconds.
 
 ### 2. Command Center (Laravel 13)

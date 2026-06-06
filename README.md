@@ -1,6 +1,6 @@
 # The Invisible Child: Pediatric Intelligence
 
-A dual-stack clinical intelligence system connecting a Python FastAPI YOLOv8 engine to a Laravel 13 Dashboard. It counts adults and children in a waiting room and displays it via a real-time Livewire UI.
+A dual-stack clinical intelligence system connecting a Python FastAPI YOLOv26 engine to a Laravel 13 Dashboard. It counts adults and children in a waiting room and displays it via a real-time Livewire UI.
 
 ## Overview
 This system acts as an "unsleeping eye" for high-stakes clinical environments like pediatric Emergency Rooms. The core architecture ensures that the intensive CV processing is completely decoupled from the real-time UI, resulting in a zero-latency video feed while metrics update in parallel via Laravel Reverb WebSockets.
@@ -8,7 +8,7 @@ This system acts as an "unsleeping eye" for high-stakes clinical environments li
 ## Architecture & Flow
 1. **CV Engine (Python/FastAPI):**
    - Connects to an IP camera or webcam stream.
-   - Runs a highly optimized `threading` architecture where the raw video frame buffer is streamed instantly, while YOLOv8 processes objects in a separate background thread.
+   - Runs a highly optimized `threading` architecture where the raw video frame buffer is streamed instantly, while YOLOv26 processes objects in a separate background thread.
    - Posts telemetry payload (`current_adults`, `current_children`) to the Laravel Backend every 3 seconds.
 2. **Backend (Laravel 13):**
    - Ingests telemetry via REST API and stores it in SQLite (`traffic_logs`).
