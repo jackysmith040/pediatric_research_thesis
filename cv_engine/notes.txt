@@ -1,2 +1,0 @@
-cd C:\Users\wiafe\Herd\pediatric-dashboard\cv_engine
-uvicorn app.main:app --host 127.0.0.1 --port 5001
