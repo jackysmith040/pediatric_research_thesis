@@ -31,7 +31,8 @@ def register_dashboard(state: TelemetryState, detector: Detector):
                 # Left Column (Video)
                 with ui.column().classes('flex-[2] h-full relative min-w-[300px]'):
                     with video_feed_card('Outpatient Triage Camera 01'):
-                        video = ui.interactive_image('/camera/stream').classes('absolute inset-0 w-full h-full object-cover')
+                        # The user requested a <video> tag. Since MJPEG isn't supported in video src, we use the poster attribute which natively supports MJPEG streams while maintaining the video element DOM structure.
+                        video = ui.html('<video autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover" poster="/camera/stream"></video>')
                         ui.run_javascript("document.querySelectorAll('.offline-overlay').forEach(el => el.style.display='none');")
 
                 # Right Column (Telemetry)
@@ -68,23 +69,36 @@ def register_dashboard(state: TelemetryState, detector: Detector):
                             p_adult = ui.linear_progress(value=0, color='grey-6').classes('h-2 rounded-full')
                     
                     # Generate Report Buttons
+                    def handle_download(content: bytes, filename: str, media_type: str):
+                        from nicegui import app
+                        from pathlib import Path
+                        if app.native.main_window:
+                            # Running in native PyWebView, save directly to Downloads
+                            downloads_dir = Path.home() / 'Downloads'
+                            downloads_dir.mkdir(parents=True, exist_ok=True)
+                            file_path = downloads_dir / filename
+                            with open(file_path, 'wb') as f:
+                                f.write(content)
+                            ui.notify(f'Saved to {file_path}', type='positive', timeout=4000)
+                        else:
+                            # Web browser mode
+                            ui.download.content(content, filename, media_type=media_type)
+
                     async def generate_csv():
                         btn_csv.props('loading')
                         await asyncio.sleep(0.5)
                         from src.engine import reporter
                         csv_bytes = await run.io_bound(lambda: reporter.generate_csv(state))
-                        ui.download.content(csv_bytes, 'capacity_report.csv', media_type='text/csv')
+                        handle_download(csv_bytes, 'capacity_report.csv', 'text/csv')
                         btn_csv.props(remove='loading')
-                        ui.notify('CSV downloaded successfully.', type='positive')
 
                     async def generate_pdf():
                         btn_pdf.props('loading')
                         await asyncio.sleep(0.5)
                         from src.engine import reporter
                         pdf_bytes = await run.io_bound(lambda: reporter.generate_pdf(state))
-                        ui.download.content(pdf_bytes, 'capacity_report.pdf', media_type='application/pdf')
+                        handle_download(pdf_bytes, 'capacity_report.pdf', 'application/pdf')
                         btn_pdf.props(remove='loading')
-                        ui.notify('PDF downloaded successfully.', type='positive')
 
                     with ui.row().classes('w-full gap-2 mt-2'):
                         btn_csv = ui.button('CSV Report', on_click=generate_csv) \
