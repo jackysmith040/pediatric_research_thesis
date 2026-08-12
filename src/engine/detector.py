@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import threading
 import time
+import math
 import ultralytics.nn.tasks
 from collections import defaultdict
 from ultralytics import YOLO
@@ -23,6 +24,8 @@ torch.load = _patched_load
 logger = logging.getLogger(__name__)
 
 
+from src.engine.stream_resolver import StreamResolver
+
 class Detector:
     def __init__(self, counter: Counter):
         self.counter = counter
@@ -31,26 +34,32 @@ class Detector:
         if os.path.exists(settings.MODEL_PATH):
             logger.info(f"Loading custom model from {settings.MODEL_PATH}")
             self.model = YOLO(settings.MODEL_PATH)
+        elif os.path.exists("models/yolov8n.pt"):
+            logger.warning(f"Model not found at {settings.MODEL_PATH}. Falling back to models/yolov8n.pt")
+            self.model = YOLO("models/yolov8n.pt")
         else:
             logger.warning(f"Model not found at {settings.MODEL_PATH}. Falling back to yolov8n.pt")
             self.model = YOLO("yolov8n.pt")
 
-        # Open video source (e.g. 0 for webcam, or RTSP URL)
-        source = settings.VIDEO_SOURCE
-        if source.isdigit():
-            source = int(source)
-            
-        self.cap = cv2.VideoCapture(source)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Prevent 3-5 frame latency buildup
-        
-        if not self.cap.isOpened():
-            logger.error(f"Failed to open video source: {source}")
+        # Dynamic Video Source & Lock
+        self.source_lock = threading.Lock()
+        self.current_source_input = settings.VIDEO_SOURCE
+        self.current_source_label = "Webcam 0"
+        self.current_source_type = "webcam"
+        self.last_error = None
+        self.is_webcam = True
+        self.cap = None
+
+        # Initialize video source
+        self._init_capture(settings.VIDEO_SOURCE)
 
         # Threading for Decoupled Architecture
         self.latest_frame = None
         self.latest_boxes = []
+        self.latest_jpeg_bytes = None
         self.box_lock = threading.Lock()
         self.running = True
+        self._synthetic_id_counter = 10000
         
         # Thread 1: Camera Capture
         self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -60,10 +69,12 @@ class Detector:
         self.yolo_thread = threading.Thread(target=self._yolo_loop, daemon=True)
         self.yolo_thread.start()
 
-        # Store model class names for display
+        # Store model class names
         self.names = self.model.names
+        self.uses_coco_person = len(self.names) == 1 and 'person' in str(self.names.get(0, '')).lower()
+        if self.uses_coco_person:
+            logger.info("Generic COCO person model detected. Height heuristics active for pediatric detection.")
 
-        # Tracking History UI (matching object-tracking.py style)
         # Tracking History UI
         self.track_history = defaultdict(lambda: [])
         self.rect_width = 1
@@ -74,14 +85,93 @@ class Detector:
         self.circle_thickness = 3
         self.polyline_thickness = 1
 
+    def _resolve_track_id(self, box, track_id: int, class_id: int, claimed_ids: set) -> int:
+        """
+        Resolves missing/unassigned track IDs (-1) by matching against existing active centroids
+        (excluding IDs already claimed in the current frame) or assigning a stable synthetic ID.
+        """
+        if track_id != -1 and track_id not in claimed_ids:
+            return track_id
+
+        cx = (box[0] + box[2]) / 2.0
+        cy = (box[1] + box[3]) / 2.0
+
+        best_match_id = None
+        min_dist = settings.UNTRACKED_SPATIAL_MATCH_RADIUS
+
+        for active_id, (acx, acy, aclass_id) in self.counter.active_centroids.items():
+            if aclass_id == class_id and active_id not in claimed_ids:
+                dist = math.hypot(cx - acx, cy - acy)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_match_id = active_id
+
+        if best_match_id is not None:
+            return best_match_id
+
+        self._synthetic_id_counter += 1
+        return self._synthetic_id_counter
+
+    def _init_capture(self, source_input: str) -> tuple[bool, str]:
+        """Resolves and opens a video capture source thread-safely."""
+        cap, label, err = StreamResolver.resolve_stream_source(source_input)
+        if err or cap is None:
+            err_msg = err or f"Failed to open video source: {label}"
+            self.last_error = err_msg
+            logger.error(f"Stream resolution error for '{source_input}': {err_msg}")
+            return False, err_msg
+
+        with self.source_lock:
+            if hasattr(self, 'cap') and self.cap is not None and self.cap.isOpened():
+                self.cap.release()
+            
+            self.cap = cap
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            source_str = str(source_input).strip()
+            self.is_webcam = source_str == "" or source_str.isdigit()
+            
+            if self.is_webcam:
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+            self.current_source_input = source_input
+            self.current_source_label = label
+            self.last_error = None
+            logger.info(f"Successfully opened stream source: {label}")
+            return True, label
+
+    def change_source(self, source_input: str) -> tuple[bool, str]:
+        """Dynamic runtime method to switch video input sources."""
+        return self._init_capture(source_input)
+
     def _capture_loop(self):
-        """Continuously drain the buffer to ensure we always have the absolute latest frame."""
-        while self.running and self.cap.isOpened():
-            ret, frame = self.cap.read()
+        """Continuously drain buffer and stream frames. Auto-loops finite video files/streams."""
+        while self.running:
+            with self.source_lock:
+                if self.cap is None or not self.cap.isOpened():
+                    time.sleep(0.05)
+                    continue
+
+                ret, frame = self.cap.read()
+
             if ret:
-                self.latest_frame = cv2.flip(frame, 1)
+                # Downscale high-resolution video frames (e.g. 1080p/4K) to MAX_FRAME_WIDTH for smooth 30 FPS
+                h, w = frame.shape[:2]
+                if w > settings.MAX_FRAME_WIDTH:
+                    new_h = int(h * (settings.MAX_FRAME_WIDTH / float(w)))
+                    frame = cv2.resize(frame, (settings.MAX_FRAME_WIDTH, new_h), interpolation=cv2.INTER_AREA)
+
+                # Mirror flip for live webcam, original orientation for streams & video files
+                self.latest_frame = cv2.flip(frame, 1) if self.is_webcam else frame
+                if not self.is_webcam:
+                    time.sleep(0.015)  # Pace local file reads smoothly
             else:
-                time.sleep(0.005)
+                # EOF reached on video stream/file -> rewind to frame 0 for continuous looping test
+                with self.source_lock:
+                    if self.cap is not None and not self.is_webcam:
+                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                time.sleep(0.01)
 
     def _yolo_loop(self):
         """Continuously run YOLO inference on the latest frame without blocking the video stream."""
@@ -91,38 +181,58 @@ class Detector:
                 continue
                 
             frame = self.latest_frame.copy()
+            frame_h = float(frame.shape[0])
             
             # Clean expired IDs from memory
             self.counter.tracker_manager.clean_expired_ids()
             self.counter.cleanup_lost_tracks()
 
-            # Run YOLO tracking
+            # Run YOLO tracking with enhanced pediatric confidence threshold
             results = self.model.track(
                 frame, 
                 persist=True, 
                 tracker=settings.TRACKER_CONFIG,
-                conf=settings.CONFIDENCE_THRESHOLD,
+                conf=settings.PEDIATRIC_CONF_THRESHOLD,
                 iou=settings.IOU_THRESHOLD,
                 imgsz=480,
                 verbose=False
             )
 
             new_boxes = []
-            if results and results[0].boxes and results[0].boxes.id is not None:
+            if results and results[0].boxes:
                 boxes = results[0].boxes.xyxy.cpu()
-                track_ids = results[0].boxes.id.int().cpu().tolist()
+                # Safely handle missing IDs by defaulting to -1
+                track_ids = results[0].boxes.id.int().cpu().tolist() if results[0].boxes.id is not None else [-1] * len(boxes)
                 class_ids = results[0].boxes.cls.int().cpu().tolist()
                 
-                for box, track_id, class_id in zip(boxes, track_ids, class_ids):
-                    if class_id in [settings.ADULT_CLASS_ID, settings.CHILD_CLASS_ID]:
-                        self.counter.process_detection(track_id, class_id, box)
-                        new_boxes.append((box, track_id, class_id))
+                claimed_ids = set()
+                for raw_id in track_ids:
+                    if raw_id != -1:
+                        claimed_ids.add(raw_id)
+                
+                for box, raw_track_id, raw_class_id in zip(boxes, track_ids, class_ids):
+                    target_class_id = raw_class_id
+
+                    # For single-class person models (e.g. COCO 0='person'), apply scale height heuristic
+                    if self.uses_coco_person and raw_class_id == 0:
+                        box_h = float(box[3] - box[1])
+                        # If person bounding box is under 40% of frame height, classify as Child (pediatric)
+                        if box_h / max(1.0, frame_h) < 0.40:
+                            target_class_id = settings.CHILD_CLASS_ID
+                        else:
+                            target_class_id = settings.ADULT_CLASS_ID
+
+                    if target_class_id in [settings.ADULT_CLASS_ID, settings.CHILD_CLASS_ID]:
+                        resolved_id = self._resolve_track_id(box, raw_track_id, target_class_id, claimed_ids)
+                        claimed_ids.add(resolved_id)
+                        self.counter.process_detection(resolved_id, target_class_id, box)
+                        new_boxes.append((box, resolved_id, target_class_id))
             
             with self.box_lock:
                 self.latest_boxes = new_boxes
 
-    def draw_bbox(self, frame, box, track_id, class_id):
-        """Draw modern sci-fi bounding box with corner brackets and translucent fill."""
+    def draw_bbox(self, frame, box, track_id, class_id, class_index=None):
+        """Draw modern sci-fi bounding box with corner brackets, translucent fill, and sequential count label."""
         x1, y1, x2, y2 = map(int, box)
         color = colors(int(class_id), True)
 
@@ -149,7 +259,10 @@ class Detector:
 
         # 3. Label with modern translucent background
         class_name = "Adult" if class_id == settings.ADULT_CLASS_ID else "Child"
-        label = f"{class_name} [{track_id}]"
+        if class_index is not None:
+            label = f"{class_name} #{class_index} [{track_id}]"
+        else:
+            label = f"{class_name} [{track_id}]"
         
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
         
@@ -185,28 +298,33 @@ class Detector:
 
     def get_latest_jpeg_bytes(self) -> bytes:
         """
-        Returns a single MJPEG encoded frame with bounding boxes. Runs independently of YOLO.
+        Returns a single MJPEG encoded frame with synchronized bounding boxes.
+        Runs independently of YOLO to guarantee smooth 30 FPS playback.
         """
         if self.latest_frame is None:
             return None
-        
+            
         frame = self.latest_frame.copy()
         
         with self.box_lock:
             current_boxes = list(self.latest_boxes)
             
+        # Compute 1-based sequential indices per class sorted left-to-right (x1 coordinate)
+        sorted_boxes = sorted(current_boxes, key=lambda b: float(b[0][0]))
+        class_counters = defaultdict(int)
+        box_indices = {}
+        for box, track_id, class_id in sorted_boxes:
+            class_counters[class_id] += 1
+            box_indices[id(box)] = class_counters[class_id]
+
         for box, track_id, class_id in current_boxes:
-            self.draw_bbox(frame, box, track_id, class_id)
-            self.draw_trail(frame, box, track_id, class_id)
-        
+            idx = box_indices.get(id(box))
+            self.draw_bbox(frame, box, track_id, class_id, class_index=idx)
+            if track_id != -1:
+                self.draw_trail(frame, box, track_id, class_id)
 
-
-        # Encode frame to JPEG
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-        if not ret:
-            return None
-        
-        return buffer.tobytes()
+        return buffer.tobytes() if ret else None
 
     def release(self):
         self.running = False

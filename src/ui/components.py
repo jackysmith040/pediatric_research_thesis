@@ -69,18 +69,11 @@ def stat_card(title: str, obj, attr: str, is_primary: bool = True):
 
 @contextmanager
 def video_feed_card(title: str):
-    with ui.card().classes('w-full h-full min-h-[500px] p-0 rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden flex flex-col shadow-2xl'):
-        # Header
-        with ui.row().classes('w-full px-6 py-4 border-b border-slate-800 bg-slate-900/50 justify-between items-center'):
+    with ui.card().classes('w-full h-full min-h-[500px] p-0 rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden flex flex-col shadow-2xl relative'):
+        # Header (Floating overlay over top of video feed)
+        with ui.row().classes('w-full px-6 py-4 border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md justify-between items-center z-20 absolute top-0 left-0 right-0'):
             ui.label(title).classes('text-sm font-semibold text-slate-200 uppercase tracking-[0.1em]')
             ui.label('Monolith Engine').classes('text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-full border border-indigo-500/20')
-        # Body wrapper
-        with ui.element('div').classes('w-full h-full flex-grow relative'):
-            # Offline state (z-0)
-            with ui.column().classes('absolute inset-0 w-full h-full flex items-center justify-center bg-slate-950 z-0 offline-overlay'):
-                ui.icon('videocam_off').classes('text-5xl text-slate-600 mb-3')
-                ui.label('Stream Offline').classes('font-medium tracking-wide text-slate-400')
-                ui.label('Awaiting Video Feed').classes('text-xs mt-1 text-slate-500')
-            # Live Feed wrapper (z-10)
-            with ui.element('div').classes('absolute inset-0 w-full h-full z-10'):
-                yield
+        # Body wrapper - flex-1 with min-h ensures proper Flexbox layout calculation instantly on page load
+        with ui.element('div').classes('w-full flex-1 relative bg-slate-950 min-h-[450px] overflow-hidden'):
+            yield

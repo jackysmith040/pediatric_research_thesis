@@ -53,3 +53,11 @@ Thumbs.db
 .agents/
 .claude/
 .impeccable/
+
+# Video & Media
+*.mp4
+*.avi
+*.mkv
+*.mov
+src/assets/*.mp4
+

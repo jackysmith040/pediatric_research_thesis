@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from src.ui.dashboard import register_dashboard
 from src.ui.landing import register_landing
+from src.ui.evaluation import register_evaluation
 
 # Global State & Engine
 telemetry_state = TelemetryState()
@@ -29,6 +30,7 @@ def stop_engine():
     if detector:
         detector.release()
 
+from fastapi.responses import StreamingResponse
 
 @app.get('/camera/stream')
 async def camera_stream():
@@ -51,16 +53,14 @@ async def camera_stream():
         media_type='multipart/x-mixed-replace; boundary=frame',
         headers={
             "Cache-Control": "no-cache, private",
-            "Pragma": "no-cache",
-            "Age": "0"
+            "Pragma": "no-cache"
         }
     )
 
-
-
 # Register UI Pages
 register_landing()
-register_dashboard(telemetry_state, detector)
+register_dashboard(telemetry_state, lambda: detector)
+register_evaluation(telemetry_state, lambda: detector)
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(native=True, title="Pediatric Clinical Command Center", window_size=(1400, 900))
+    ui.run(title="Pediatric Clinical Command Center")

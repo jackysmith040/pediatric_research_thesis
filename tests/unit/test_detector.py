@@ -1,0 +1,93 @@
+import pytest
+from unittest.mock import MagicMock
+from src.engine.detector import Detector
+from src.engine.counter import Counter
+from src.engine.tracker_manager import TrackerManager
+from src.state.telemetry import TelemetryState
+from src.engine.config import settings
+
+@pytest.fixture
+def mock_detector(monkeypatch):
+    # Prevent YOLO model loading and video capture opening during unit tests
+    monkeypatch.setattr("src.engine.detector.YOLO", MagicMock())
+    monkeypatch.setattr("cv2.VideoCapture", MagicMock())
+    
+    tracker_manager = TrackerManager(expiry_seconds=30)
+    state = TelemetryState()
+    counter = Counter(tracker_manager, state)
+    
+    settings.ADULT_CLASS_ID = 0
+    settings.CHILD_CLASS_ID = 1
+    settings.UNTRACKED_SPATIAL_MATCH_RADIUS = 40.0
+    
+    detector = Detector.__new__(Detector)
+    detector.counter = counter
+    detector._synthetic_id_counter = 10000
+    return detector
+
+def test_resolve_track_id_returns_original_if_valid_and_unclaimed(mock_detector):
+    box = (10, 10, 50, 50)
+    claimed_ids = set()
+    resolved = mock_detector._resolve_track_id(box, track_id=42, class_id=0, claimed_ids=claimed_ids)
+    assert resolved == 42
+
+def test_resolve_track_id_matches_existing_active_centroid_if_unclaimed(mock_detector):
+    mock_detector.counter.active_centroids[5] = (30.0, 30.0, 0)
+    box = (12, 12, 52, 52)
+    claimed_ids = set()
+    resolved = mock_detector._resolve_track_id(box, track_id=-1, class_id=0, claimed_ids=claimed_ids)
+    assert resolved == 5
+
+def test_resolve_track_id_prevents_stolen_claimed_ids(mock_detector):
+    # Active centroid 5 is already claimed in this frame
+    mock_detector.counter.active_centroids[5] = (30.0, 30.0, 0)
+    box = (12, 12, 52, 52)
+    claimed_ids = {5}
+    resolved = mock_detector._resolve_track_id(box, track_id=-1, class_id=0, claimed_ids=claimed_ids)
+    # Cannot claim ID 5 because it's already claimed -> gets new synthetic ID
+    assert resolved == 10001
+
+def test_multiple_untracked_detections_receive_distinct_ids(mock_detector):
+    # Two people close together without track IDs (-1)
+    box1 = (10, 10, 30, 30) # Centroid (20, 20)
+    box2 = (15, 15, 35, 35) # Centroid (25, 25)
+    
+    claimed_ids = set()
+    res1 = mock_detector._resolve_track_id(box1, track_id=-1, class_id=1, claimed_ids=claimed_ids)
+    claimed_ids.add(res1)
+    
+    res2 = mock_detector._resolve_track_id(box2, track_id=-1, class_id=1, claimed_ids=claimed_ids)
+    claimed_ids.add(res2)
+    
+    assert res1 != res2
+    assert len(claimed_ids) == 2
+
+def test_detector_change_source_success(mock_detector, monkeypatch):
+    import threading
+    mock_detector.source_lock = threading.Lock()
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    monkeypatch.setattr("cv2.VideoCapture", lambda target: mock_cap)
+    
+    success, label = mock_detector.change_source("0")
+    assert success is True
+    assert mock_detector.current_source_label == label
+    assert mock_detector.last_error is None
+
+def test_detector_change_source_failure_on_closed_cap(mock_detector, monkeypatch):
+    import threading
+    mock_detector.source_lock = threading.Lock()
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = False
+    monkeypatch.setattr("cv2.VideoCapture", lambda target: mock_cap)
+    
+def test_class_id_mappings(mock_detector):
+    assert settings.ADULT_CLASS_ID == 0
+    assert settings.CHILD_CLASS_ID == 1
+
+def test_uses_coco_person_flag(mock_detector):
+    mock_detector.names = {0: 'person'}
+    mock_detector.uses_coco_person = len(mock_detector.names) == 1 and 'person' in str(mock_detector.names.get(0, '')).lower()
+    assert mock_detector.uses_coco_person is True
+
+

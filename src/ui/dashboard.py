@@ -9,8 +9,11 @@ from src.ui.components import (
 )
 from src.state.telemetry import TelemetryState
 from src.engine.detector import Detector
+from src.engine.stream_resolver import PRESET_TEST_STREAMS
 
-def register_dashboard(state: TelemetryState, detector: Detector):
+from typing import Callable, Optional
+
+def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optional[Detector]]):
     @ui.page('/dashboard')
     def dashboard():
         # Update progress bars manually since linear_progress value isn't auto-bound nicely from models
@@ -28,15 +31,45 @@ def register_dashboard(state: TelemetryState, detector: Detector):
             # The core layout: flex-grow fills screen, overflow-y-auto allows vertical scrolling if needed
             with ui.row().classes('w-full h-full flex-grow p-4 md:p-6 gap-6 items-stretch overflow-y-auto flex-wrap md:flex-nowrap'):
                 
-                # Left Column (Video)
-                with ui.column().classes('flex-[2] h-full relative min-w-[300px]'):
+                # Left Column (Video - dominates screen)
+                with ui.column().classes('flex-[4] h-full relative min-w-[400px] flex flex-col gap-3'):
                     with video_feed_card('Outpatient Triage Camera 01'):
-                        # The user requested a <video> tag. Since MJPEG isn't supported in video src, we use the poster attribute which natively supports MJPEG streams while maintaining the video element DOM structure.
-                        video = ui.html('<video autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover" poster="/camera/stream"></video>')
-                        ui.run_javascript("document.querySelectorAll('.offline-overlay').forEach(el => el.style.display='none');")
+                        # Native browser MJPEG handling. No WebSockets, zero UI overhead.
+                        ui.element('img').props('src="/camera/stream"').classes('absolute inset-0 w-full h-full object-cover z-10')
+                        
+                        # Source Status Overlay Badge
+                        with ui.row().classes('absolute bottom-4 left-4 z-20 items-center gap-2 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700'):
+                            ui.element('span').classes('w-2 h-2 rounded-full bg-emerald-400 animate-pulse')
+                            active_source_label = ui.label('Webcam 0').classes('text-xs font-medium text-slate-200')
 
-                # Right Column (Telemetry)
-                with ui.column().classes('flex-[1] h-full flex flex-col gap-4 overflow-y-auto min-w-[300px]'):
+                    # Controls directly under Video Feed
+                    with ui.row().classes('w-full items-center justify-between gap-4 p-2 z-30'):
+                        async def turn_on_webcam():
+                            detector = get_detector()
+                            if not detector:
+                                ui.notify('Detection engine initializing...', type='warning')
+                                return
+                            
+                            btn_webcam.props('loading')
+                            success, label_or_err = await run.io_bound(lambda: detector.change_source("0"))
+                            btn_webcam.props(remove='loading')
+
+                            if success:
+                                active_source_label.text = label_or_err
+                                ui.notify('Live Camera (Webcam 0) activated', type='positive', icon='videocam')
+                            else:
+                                ui.notify(f'Webcam error: {label_or_err}', type='negative', icon='videocam_off')
+
+                        btn_webcam = ui.button('Turn On Live Camera', on_click=turn_on_webcam) \
+                            .props('unelevated rounded icon=videocam') \
+                            .classes('px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-950/50')
+
+                        ui.button('External Video Testing', on_click=lambda: ui.navigate.to('/video-test')) \
+                            .props('outline rounded icon=science') \
+                            .classes('px-6 py-2.5 border-slate-700 text-indigo-400 hover:bg-slate-800 hover:text-indigo-300 font-bold text-sm')
+
+                # Right Column (Telemetry - compact sidebar)
+                with ui.column().classes('flex-[1] h-full flex flex-col gap-4 overflow-y-auto min-w-[280px]'):
                     alert_banner('Capacity Warning', 'Pediatric load exceeds standard waiting capacity. Consider dispatching additional triage staff.', state, 'overcrowding_alert')
                     
                     with ui.row().classes('w-full justify-between items-center mb-0 mt-2'):
@@ -57,15 +90,15 @@ def register_dashboard(state: TelemetryState, detector: Detector):
                         ui.label('Daily Aggregates').classes('text-xs font-semibold text-slate-400 tracking-[0.15em] uppercase mb-4 pb-4 border-b border-slate-800 w-full')
                         
                         with ui.column().classes('w-full gap-2 mb-6'):
-                            with ui.row().classes('w-full justify-between items-center text-sm'):
-                                ui.label('Total Pediatric Processed').classes('font-medium text-white')
-                                ui.label().bind_text_from(state, 'total_daily_children').classes('font-bold tracking-wide text-white')
+                            with ui.row().classes('w-full justify-between items-center text-sm flex-nowrap'):
+                                ui.label('Pediatric Processed').classes('font-medium text-white whitespace-nowrap')
+                                ui.label().bind_text_from(state, 'total_daily_children').classes('font-bold tracking-wide text-white whitespace-nowrap ml-2')
                             p_child = ui.linear_progress(value=0, color='primary').classes('h-2 rounded-full')
                             
                         with ui.column().classes('w-full gap-2'):
-                            with ui.row().classes('w-full justify-between items-center text-sm'):
-                                ui.label('Total Adults Processed').classes('font-medium text-slate-400')
-                                ui.label().bind_text_from(state, 'total_daily_adults').classes('font-bold tracking-wide text-slate-300')
+                            with ui.row().classes('w-full justify-between items-center text-sm flex-nowrap'):
+                                ui.label('Adults Processed').classes('font-medium text-slate-400 whitespace-nowrap')
+                                ui.label().bind_text_from(state, 'total_daily_adults').classes('font-bold tracking-wide text-slate-300 whitespace-nowrap ml-2')
                             p_adult = ui.linear_progress(value=0, color='grey-6').classes('h-2 rounded-full')
                     
                     # Generate Report Buttons
