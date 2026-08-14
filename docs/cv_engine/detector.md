@@ -1,28 +1,29 @@
-# 👁️ CV Engine: `detector.py`
+# `src/engine/detector.py`
 
-## What does `detector.py` do?
-This is the heavy lifter. The `detector.py` file is where the actual Artificial Intelligence lives. It loads the YOLOv26 neural network and feeds the camera video into it frame by frame.
-
-### The Problem it Solves:
-Object detection takes time. If a camera is shooting video at 30 frames per second, but the AI takes 0.1 seconds to think about a frame, the video will stutter and lag horribly. 
-
-### The Solution (Decoupled Threading):
-To fix the lag, the `Detector` class uses Python `threading`. It creates two completely separate mini-programs (threads) that run at the same time:
-1. **The Capture Thread (`_capture_loop`):** This thread does nothing but pull the absolute newest picture from the camera as fast as possible.
-2. **The YOLO Thread (`_yolo_loop`):** This thread grabs the newest picture, feeds it to the AI, and saves the coordinates of where the people are.
-
-Because these two tasks are separated, the video stream remains incredibly smooth (Zero-Latency) even if the AI is running on a slow computer!
-
-### Drawing the UI:
-The file also contains `draw_bbox` and `draw_trail`. These functions use the OpenCV library (`cv2`) to draw the colorful squares around people and the little trails that follow them as they move.
+## Purpose
+`detector.py` provides the `Detector` class, which manages camera capture, YOLOv26 object detection, ByteTrack tracking, tracking trail visualization, spatial centroid fallback, and MJPEG frame generation.
 
 ---
 
-### 🧸 Explain Like I'm 5 (ELI5)
-Imagine you are trying to draw portraits of cars driving by on a highway. If you stop to draw a highly detailed portrait of one car (the AI inference), 50 other cars will zoom by while you aren't looking! 
-To fix this, you get a friend with a camera (the Capture Thread). Your friend just snaps photos of the highway as fast as possible. When you finish your drawing, you ask your friend for their *absolute newest* photo and start drawing that one. You might miss a few cars in between, but the highway never stops moving!
+## Key Architecture
 
----
+### 1. Decoupled Dual-Thread Loop
+* **Capture Thread (`_capture_loop`)**: Drains the OpenCV video stream constantly using `CAP_PROP_BUFFERSIZE = 1`, storing only the latest frame in `self.latest_frame`.
+* **Inference Thread (`_inference_loop`)**: Pulls `self.latest_frame`, runs YOLOv26 inference (`track()`), draws bounding boxes and tracking trails, and computes JPEG bytes.
 
-### 👩‍💻 How to Contribute
-If you want to change how the video looks—like changing the colors of the boxes, adding new text to the screen, or drawing circles instead of squares—this is the file you edit. Look for the `cv2.putText` and `cv2.rectangle` lines inside the `get_frame_generator()` and `draw_bbox()` functions!
+### 2. Untracked Spatial Centroid Resolution
+Method `_resolve_track_id(box, track_id, class_id, claimed_ids)` handles untracked boxes (`track_id == -1`):
+* Calculates box centroid $(cx, cy)$.
+* Finds closest active centroid of matching `class_id` within `UNTRACKED_SPATIAL_MATCH_RADIUS`.
+* Prevents stolen or duplicate IDs by maintaining a `claimed_ids` set per frame.
+* Assigns a synthetic tracking ID if no match is found.
+
+### 3. Dynamic Source Switching
+Method `change_source(new_source: str) -> Tuple[bool, str]`:
+* Thread-safe via `self.source_lock`.
+* Uses `StreamResolver.resolve_stream_source(new_source)` to open new webcam/file/YouTube streams.
+* Releases old `VideoCapture` and seamlessly redirects the capture thread without restarting the server.
+
+### 4. Frame Streaming
+Method `get_latest_jpeg_bytes() -> Optional[bytes]`:
+* Returns the most recent annotated JPEG frame bytes for browser MJPEG streaming at `/camera/stream`.

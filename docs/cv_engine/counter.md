@@ -1,23 +1,35 @@
-# 🧮 CV Engine: `counter.py`
+# `src/engine/counter.py`
 
-## What does `counter.py` do?
-The `counter.py` file contains the `Counter` class. This class is the "accountant" of the CV Engine. While other parts of the system are busy looking at the video and drawing boxes, the `Counter` is purely focused on the math.
-
-### Key Responsibilities:
-1. **Keeping Score:** It holds the integers for `current_adults`, `current_children`, `total_daily_adults`, and `total_daily_children`.
-2. **Processing Detections:** The `process_detection()` method is called every time the AI spots someone. It checks with the `tracker_manager.py` to see if this person is *new* or if we've already counted them. If they are new, it increments the daily total!
-3. **Overcrowding Logic:** The `is_overcrowded()` method checks if the current number of children in the room exceeds the `WAITING_ROOM_CAPACITY` limit defined in `config.py`.
-
-### How it works with others:
-The `Counter` needs a `TrackerManager` to work. You pass the `TrackerManager` into the `Counter` when you create it. Then, whenever the `Counter` needs to know exactly how many people are in the room *right now*, it just asks the `TrackerManager` via the `update_current_counts()` method.
+## Purpose
+`counter.py` provides the `Counter` class, which computes real-time patient occupancy counts, tracks spatial centroids for untracked detections, updates cumulative daily totals, and evaluates clinical overcrowding status.
 
 ---
 
-### 🧸 Explain Like I'm 5 (ELI5)
-Imagine you are standing at the door of a party with a clicker in each hand. The AI (the bouncer) points to someone and says "Hey, I see a child!" 
-You (the Counter) look at your notebook to see if you've counted that exact child before. If they just arrived, you click your counter +1. If they were already here and just walked past you again, you ignore them. You also keep an eye on the maximum capacity of the room; if too many people enter, you press the big red "OVERCROWDED" alarm button!
+## Core Attributes
+
+* **`tracker_manager`**: Reference to `TrackerManager` instance.
+* **`state`**: Reference to shared `TelemetryState` Pydantic instance.
+* **`active_centroids`**: Dictionary mapping `track_id -> (cx, cy, class_id)` for tracking active object positions.
+* **`seen_ids`**: Set of all object tracking IDs seen since server launch.
 
 ---
 
-### 👩‍💻 How to Contribute
-If you want to add new logic—for example, sending a warning if there are zero adults but many children (unsupervised minors)—you would write that logic right here in `counter.py`. Add a new method like `is_unsupervised()` and have it return `True` if `current_adults == 0` and `current_children > 0`.
+## Methods
+
+### `update_counts(active_tracks: List[Tuple[int, int]], current_centroids: Dict[int, Tuple[float, float, int]])`
+Updates the real-time occupancy counts:
+1. Iterates over active object tracking IDs and class IDs (`0` for adult, `1` for child).
+2. Registers new tracking IDs in `seen_ids` and updates cumulative daily totals (`total_daily_adults`, `total_daily_children`).
+3. Updates `active_centroids` dictionary.
+4. Purges expired object IDs via `tracker_manager.clean_expired_ids()`.
+5. Syncs results directly into `TelemetryState` attributes (`current_adults`, `current_children`).
+6. Evaluates overcrowding alert condition.
+
+### `is_overcrowded() -> bool`
+Returns `True` if `current_children` exceeds the calculated threshold based on `WAITING_ROOM_CAPACITY` and `PEDIATRIC_ALERT_THRESHOLD_PERCENT`.
+
+---
+
+## Spatial Centroid Tracking
+
+When ByteTrack fails to assign an ID to a detection (`track_id == -1`), `Counter` provides its active centroid history to `Detector` to perform spatial matching within `UNTRACKED_SPATIAL_MATCH_RADIUS`, preventing transient ID drops.

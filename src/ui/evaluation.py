@@ -26,18 +26,51 @@ def register_evaluation(state: TelemetryState, get_detector: Callable[[], Option
                     with video_feed_card('Model Evaluation Feed'):
                         ui.element('img').props('src="/camera/stream"').classes('absolute inset-0 w-full h-full object-cover z-10')
                         
-                        # Active Stream Status Badge
+                        # Active Stream Status & Tracker Badges
                         with ui.row().classes('absolute bottom-4 left-4 z-20 items-center gap-2 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700'):
                             ui.element('span').classes('w-2 h-2 rounded-full bg-indigo-400 animate-pulse')
                             active_source_label = ui.label('Select Source Below').classes('text-xs font-medium text-slate-200')
 
+                        with ui.row().classes('absolute bottom-4 right-4 z-20 items-center gap-2 bg-indigo-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-indigo-700/50'):
+                            ui.icon('tune').classes('text-xs text-indigo-400')
+                            tracker_badge = ui.label('ByteTrack [Auto]').classes('text-xs font-mono font-medium text-indigo-300')
+
+                        def update_tracker_badge():
+                            det = get_detector()
+                            if det and hasattr(det, 'current_tracker_status_label'):
+                                tracker_badge.text = det.current_tracker_status_label
+
+                        ui.timer(1.0, update_tracker_badge)
+
                     # Video Source Switcher Card
                     with ui.card().classes('w-full p-6 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col gap-4 z-30 shadow-xl'):
-                        with ui.row().classes('w-full justify-between items-center'):
+                        with ui.row().classes('w-full justify-between items-center flex-wrap gap-2'):
                             with ui.row().classes('items-center gap-2'):
                                 ui.icon('science').classes('text-indigo-400 text-xl')
                                 ui.label('Evaluation Video Source').classes('text-sm font-bold tracking-wider text-slate-200 uppercase')
-                            ui.label('Local MP4 / YouTube / RTSP').classes('text-xs font-mono text-slate-400 bg-slate-800 px-2 py-1 rounded')
+                            
+                            # Tracker selector dropdown for evaluation lab
+                            async def on_eval_tracker_change(e):
+                                det = get_detector()
+                                if not det:
+                                    return
+                                success, msg = det.change_tracker_mode(e.value)
+                                if success:
+                                    tracker_badge.text = det.current_tracker_status_label
+                                    ui.notify(msg, type='positive', icon='tune', timeout=3000)
+
+                            ui.select(
+                                options={
+                                    'auto': '⚡ Auto Switch (Situation Aware)',
+                                    'bytetrack': '🎯 ByteTrack (Baseline)',
+                                    'botsort': '📹 BoT-SORT (Motion Comp)',
+                                    'ocsort': '🔄 OC-SORT (Non-Linear)',
+                                    'fasttracker': '👥 FastTracker (Occlusion Aware)'
+                                },
+                                value='auto',
+                                on_change=on_eval_tracker_change
+                            ).props('dense outlined dark rounded').classes('text-xs bg-slate-950 border-slate-700 min-w-[210px]')
+
 
                         preset_options = {p['url']: p['name'] for p in PRESET_TEST_STREAMS}
                         preset_options['custom'] = 'Custom Video URL or File Path...'

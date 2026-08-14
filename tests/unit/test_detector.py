@@ -90,4 +90,38 @@ def test_uses_coco_person_flag(mock_detector):
     mock_detector.uses_coco_person = len(mock_detector.names) == 1 and 'person' in str(mock_detector.names.get(0, '')).lower()
     assert mock_detector.uses_coco_person is True
 
+def test_apply_clahe_preprocessing():
+    import numpy as np
+    # Create a synthetic 100x100 BGR test image
+    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    dummy_frame[20:80, 20:80] = [100, 150, 200]
+    
+    enhanced = Detector.apply_clahe(dummy_frame, clip_limit=2.0, tile_grid_size=8)
+    assert enhanced is not None
+    assert enhanced.shape == dummy_frame.shape
+    assert enhanced.dtype == np.uint8
+
+def test_supervision_bytetrack_initialization(mock_detector):
+    import supervision as sv
+    tracker = sv.ByteTrack(
+        track_activation_threshold=settings.BYTETRACK_TRACK_THRESH,
+        minimum_matching_threshold=settings.BYTETRACK_MATCH_THRESH,
+        frame_rate=settings.BYTETRACK_FRAME_RATE
+    )
+    assert tracker is not None
+
+def test_change_tracker_mode(mock_detector):
+    from src.engine.tracker_engine import MultiTrackerEngine
+    mock_detector.tracker_engine = MultiTrackerEngine(initial_mode="auto")
+    mock_detector.current_tracker_status_label = "ByteTrack [Auto]"
+    
+    success, msg = mock_detector.change_tracker_mode("botsort")
+    assert success is True
+    assert "BoT-SORT" in msg
+    assert "BoT-SORT" in mock_detector.current_tracker_status_label
+    assert "[Manual]" in mock_detector.current_tracker_status_label
+
+
+
+
 

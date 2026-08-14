@@ -25,6 +25,23 @@ class Settings(BaseSettings):
     PEDIATRIC_CONF_THRESHOLD: float = float(os.getenv("PEDIATRIC_CONF_THRESHOLD", "0.30"))
     MAX_FRAME_WIDTH: int = int(os.getenv("MAX_FRAME_WIDTH", "1280"))
 
+    # CLAHE Preprocessing Configuration
+    ENABLE_CLAHE: bool = os.getenv("ENABLE_CLAHE", "true").lower() in ("true", "1", "yes")
+    CLAHE_CLIP_LIMIT: float = float(os.getenv("CLAHE_CLIP_LIMIT", "2.0"))
+    CLAHE_TILE_GRID_SIZE: int = int(os.getenv("CLAHE_TILE_GRID_SIZE", "8"))
+
+    # Roboflow Supervision & ByteTrack Configuration
+    BYTETRACK_TRACK_THRESH: float = float(os.getenv("BYTETRACK_TRACK_THRESH", "0.45"))
+    BYTETRACK_MATCH_THRESH: float = float(os.getenv("BYTETRACK_MATCH_THRESH", "0.8"))
+    BYTETRACK_FRAME_RATE: int = int(os.getenv("BYTETRACK_FRAME_RATE", "30"))
+
+    # Multi-Tracker & Auto-Switching Configuration
+    DEFAULT_TRACKER_MODE: str = os.getenv("DEFAULT_TRACKER_MODE", "auto")
+    AUTO_SWITCH_STABILIZATION_SECONDS: float = float(os.getenv("AUTO_SWITCH_STABILIZATION_SECONDS", "3.0"))
+    CAMERA_MOTION_THRESHOLD: float = float(os.getenv("CAMERA_MOTION_THRESHOLD", "12.0"))
+    OCCLUSION_DENSITY_THRESHOLD: float = float(os.getenv("OCCLUSION_DENSITY_THRESHOLD", "0.25"))
+
+
     # Class mappings (expbetter.pt trained weights: 0=Adult, 1=Child)
     ADULT_CLASS_ID: int = int(os.getenv("ADULT_CLASS_ID", "0"))
     CHILD_CLASS_ID: int = int(os.getenv("CHILD_CLASS_ID", "1"))

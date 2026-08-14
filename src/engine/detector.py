@@ -24,9 +24,30 @@ torch.load = _patched_load
 logger = logging.getLogger(__name__)
 
 
+import supervision as sv
 from src.engine.stream_resolver import StreamResolver
+from src.engine.tracker_engine import MultiTrackerEngine
+
 
 class Detector:
+    @staticmethod
+    def apply_clahe(frame: np.ndarray, clip_limit: float = 2.0, tile_grid_size: int = 8) -> np.ndarray:
+        """
+        Applies Contrast Limited Adaptive Histogram Equalization (CLAHE) in the LAB color space.
+        Enhances contrast in low-light clinical triage environments without shifting color balance.
+        """
+        if frame is None or frame.size == 0:
+            return frame
+        try:
+            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+            l_channel, a_channel, b_channel = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=float(clip_limit), tileGridSize=(int(tile_grid_size), int(tile_grid_size)))
+            cl = clahe.apply(l_channel)
+            limg = cv2.merge((cl, a_channel, b_channel))
+            return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+        except Exception as e:
+            logger.error(f"Error applying CLAHE preprocessing: {e}")
+            return frame
     def __init__(self, counter: Counter):
         self.counter = counter
         
@@ -41,7 +62,17 @@ class Detector:
             logger.warning(f"Model not found at {settings.MODEL_PATH}. Falling back to yolov8n.pt")
             self.model = YOLO("yolov8n.pt")
 
+        # Initialize Roboflow Supervision Multi-Tracker Engine & Annotators
+        self.tracker_engine = MultiTrackerEngine(initial_mode=settings.DEFAULT_TRACKER_MODE)
+        self.current_tracker_status_label = "ByteTrack [Auto]"
+        
+        self.box_annotator = sv.BoundingBoxAnnotator(thickness=2)
+        self.label_annotator = sv.LabelAnnotator(text_scale=0.5, text_thickness=1)
+        self.trace_annotator = sv.TraceAnnotator(trace_length=30, thickness=2)
+
+
         # Dynamic Video Source & Lock
+
         self.source_lock = threading.Lock()
         self.current_source_input = settings.VIDEO_SOURCE
         self.current_source_label = "Webcam 0"
@@ -145,6 +176,14 @@ class Detector:
         """Dynamic runtime method to switch video input sources."""
         return self._init_capture(source_input)
 
+    def change_tracker_mode(self, mode: str) -> tuple[bool, str]:
+        """Dynamic runtime method to switch tracking algorithms or auto mode."""
+        success, msg = self.tracker_engine.set_mode(mode)
+        if success:
+            self.current_tracker_status_label = self.tracker_engine.get_info()["status_label"]
+        return success, msg
+
+
     def _capture_loop(self):
         """Continuously drain buffer and stream frames. Auto-loops finite video files/streams."""
         while self.running:
@@ -174,7 +213,7 @@ class Detector:
                 time.sleep(0.01)
 
     def _yolo_loop(self):
-        """Continuously run YOLO inference on the latest frame without blocking the video stream."""
+        """Continuously run CLAHE preprocessing, YOLO inference, and Supervision ByteTrack multi-object tracking."""
         while self.running:
             if self.latest_frame is None:
                 time.sleep(0.01)
@@ -183,15 +222,16 @@ class Detector:
             frame = self.latest_frame.copy()
             frame_h = float(frame.shape[0])
             
+            # Apply CLAHE Preprocessing in LAB color space if enabled
+            proc_frame = self.apply_clahe(frame, settings.CLAHE_CLIP_LIMIT, settings.CLAHE_TILE_GRID_SIZE) if settings.ENABLE_CLAHE else frame
+            
             # Clean expired IDs from memory
             self.counter.tracker_manager.clean_expired_ids()
             self.counter.cleanup_lost_tracks()
 
-            # Run YOLO tracking with enhanced pediatric confidence threshold
-            results = self.model.track(
-                frame, 
-                persist=True, 
-                tracker=settings.TRACKER_CONFIG,
+            # Run YOLO prediction
+            results = self.model.predict(
+                proc_frame, 
                 conf=settings.PEDIATRIC_CONF_THRESHOLD,
                 iou=settings.IOU_THRESHOLD,
                 imgsz=480,
@@ -199,12 +239,24 @@ class Detector:
             )
 
             new_boxes = []
-            if results and results[0].boxes:
-                boxes = results[0].boxes.xyxy.cpu()
-                # Safely handle missing IDs by defaulting to -1
-                track_ids = results[0].boxes.id.int().cpu().tolist() if results[0].boxes.id is not None else [-1] * len(boxes)
-                class_ids = results[0].boxes.cls.int().cpu().tolist()
+            if results and len(results) > 0 and len(results[0].boxes) > 0:
+                # Convert Ultralytics results to Supervision Detections
+                detections = sv.Detections.from_ultralytics(results[0])
                 
+                # Update Multi-Tracker Engine with detections and frame for scene analysis
+                detections, status_label = self.tracker_engine.update_with_detections(detections, frame)
+                self.current_tracker_status_label = status_label
+
+                boxes = detections.xyxy
+
+                raw_track_ids = detections.tracker_id
+                if raw_track_ids is None:
+                    track_ids = [-1] * len(boxes)
+                else:
+                    track_ids = [int(tid) if tid is not None else -1 for tid in raw_track_ids]
+                
+                class_ids = detections.class_id.astype(int).tolist() if detections.class_id is not None else [0] * len(boxes)
+
                 claimed_ids = set()
                 for raw_id in track_ids:
                     if raw_id != -1:
@@ -230,6 +282,7 @@ class Detector:
             
             with self.box_lock:
                 self.latest_boxes = new_boxes
+
 
     def draw_bbox(self, frame, box, track_id, class_id, class_index=None):
         """Draw modern sci-fi bounding box with corner brackets, translucent fill, and sequential count label."""

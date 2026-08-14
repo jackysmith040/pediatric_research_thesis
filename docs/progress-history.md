@@ -1,29 +1,58 @@
-# 📈 Progress History & Project Post-Mortem
+# 📈 Progress History & Project Changelog
 
-Welcome to the historical log of **The Invisible Child**. This document tracks the evolution of the project from its initial project plan to the final senior-stable delivery, detailing the errors encountered, the architectural decisions made, and the fixes applied. 
-
-This is the ultimate resource for understanding *why* things were built the way they were.
+Welcome to the historical log of **The Invisible Child**. This document tracks the technical evolution of the project from initial design to senior-stable delivery.
 
 ---
 
-## Phase 1: The Initial Vision
-The project started with a spec (`project-plan/v1/spec.md`) to build a dual-stack pediatric monitoring system.
-- **Goal:** Use AI to count adults and children in a waiting room to prevent pediatric overcrowding.
-- **Tech Stack:** Python (FastAPI + YOLO) for the CV Engine, Laravel for the Command Center.
-- **Design:** "Impeccable" methodology—Space Gray backgrounds, Electric Blue accents, cinematic UI.
+## Phase 1: Dual-Stack Prototype (Laravel + FastAPI)
+* **Goal**: Build a pediatric monitoring system counting adults and children in hospital waiting areas.
+* **Architecture**: Decoupled Python (FastAPI + YOLO) CV Engine sending telemetry to a Laravel 13 Command Center via HTTP and WebSockets (Laravel Reverb).
+* **UI**: "Impeccable" clinical editorial aesthetic with Space Gray and Electric Blue styling.
 
-## Phase 2: Python Threading Crisis
-The primary challenge of the CV Engine was avoiding video stream stutter caused by blocking inference calls.
-- **Error Encountered:** OpenCV's `VideoCapture` would buffer 3 to 5 frames, so processing an older frame meant the UI video feed looked like a slow-motion slideshow.
-- **The Fix:** We implemented a two-thread decouple: The Capture Thread continuously drains `cv2` via a `CAP_PROP_BUFFERSIZE = 1` property so it only holds the most recent frame, while the Inference Thread pulls only the latest frame, processes it, and updates bounding box coordinates. This successfully created a zero-latency feel on the stream.
+---
 
-## Phase 3: The Architecture Pivot (NiceGUI Monolith)
-The project initially decoupled the logic entirely (Laravel for the UI Dashboard, and FastAPI for the CV engine).
-- **The Problem:** The Laravel Reverb architecture introduced massive overhead. It required a separate server, constant network requests across localhost, and bloated the tech stack.
-- **The Pivot:** We transitioned the entire UI over to **NiceGUI**, effectively uniting the front-end dashboard and the YOLO backend into a **Single Python Monolith**.
-- **The Refactor:** The CV Engine was integrated into a unified `src/` directory package (`src/ui`, `src/engine`, `src/state`). The complex WebSocket telemetry bridge was replaced with a simple Pydantic `TelemetryState` model acting as a shared in-memory dictionary.
-- **The Result:** Massive performance gains, instant reactivity, and a much cleaner developer experience.
+## Phase 2: OpenCV Threading Optimization
+* **Issue**: OpenCV's `VideoCapture` buffer caused severe stream lag (3-5 frame latency) when YOLO inference ran on the main loop.
+* **Fix**: Implemented a decoupled dual-thread pattern:
+  * **Capture Thread**: Drains OpenCV buffer (`CAP_PROP_BUFFERSIZE = 1`) continuously.
+  * **Inference Thread**: Fetches latest frame asynchronously for YOLO inference and tracking overlay.
 
-## Phase 4: Senior Stable Delivery & Impeccable Design
-- Instead of using a simple generic landing page, an Impeccable design system was applied across the board (`slate-950` dark themes with `indigo-600` accents).
-- The system is now 100% Python, robust, clinical, and completely stable.
+---
+
+## Phase 3: The Monolith Pivot (NiceGUI)
+* **Issue**: Dual-stack network overhead across localhost and complex multi-server deployment (Laravel + Reverb + Uvicorn).
+* **Pivot**: Consolidated UI, state, and vision backend into a single **NiceGUI Python Monolith**.
+* **Result**: Zero-network telemetry binding via `TelemetryState` Pydantic model, native browser MJPEG stream at `/camera/stream`, and simplified single-command execution.
+
+---
+
+## Phase 4: Spatial Centroid Tracking & Dynamic Source Switching
+* **Issue**: Untracked detections (`track_id == -1`) caused temporary ID flickers when ByteTrack lost target continuity.
+* **Fix**: Added spatial centroid fallback matching (`UNTRACKED_SPATIAL_MATCH_RADIUS = 40.0`) in `Detector._resolve_track_id()` to match untracked boxes to active centroids.
+* **Feature**: Added thread-safe dynamic camera source switching (`Detector.change_source()`) allowing seamless camera stream changes without server restarts.
+
+---
+
+## Phase 5: Stream Resolver, Evaluation Suite & Unit Tests
+* **Stream Resolver (`stream_resolver.py`)**: Support for multi-source inputs (Webcam 0, YouTube clinical streams via `cap_from_youtube`, local MP4 files, RTSP streams).
+* **Evaluation Lab (`/video-test`)**: NiceGUI page enabling live testing across preset hospital triage feeds and custom URLs.
+* **PyWebView Native Download Support**: Detected native desktop mode and routed CSV/PDF report downloads directly to local `Downloads/` directory.
+* **Automated Unit Testing (`tests/unit/`)**: Comprehensive Pytest suite covering `Counter`, `Detector` (synthetic IDs, spatial fallback, source switching), and `StreamResolver`.
+
+---
+
+## Phase 6: Roboflow Supervision & CLAHE Preprocessing Upgrade
+* **Roboflow Supervision (`supervision` v0.30.0)**: Standardized object detection parsing around `sv.Detections.from_ultralytics(results)` and `sv.ByteTrack` multi-object tracking.
+* **CLAHE Preprocessing**: Added LAB color space Contrast Limited Adaptive Histogram Equalization (`Detector.apply_clahe`) to enhance low-light triage contrast prior to YOLO inference.
+* **Configurability**: Added `ENABLE_CLAHE`, `CLAHE_CLIP_LIMIT`, `CLAHE_TILE_GRID_SIZE`, `BYTETRACK_TRACK_THRESH`, `BYTETRACK_MATCH_THRESH`, and `BYTETRACK_FRAME_RATE` to `src/engine/config.py`.
+
+---
+
+## Phase 7: Multi-Tracker Suite & Automatic Situation Switching
+* **Multi-Tracker Suite (`tracker_engine.py`)**: Implemented dynamic multi-tracker support for `ByteTrack` (fast baseline), `BoT-SORT` (camera motion compensation), `OC-SORT` (non-linear motion), and `FastTracker` (occlusion aware).
+* **Automatic Scene Analyzer**: Real-time estimation of camera motion (downsampled optical flow/frame difference) and crowd occlusion density (pairwise IoU overlap).
+* **Hysteresis Stabilization**: 3.0-second stabilization timer prevents rapid flicker between tracker algorithms under borderline conditions.
+* **Interactive UI Controls**: Embedded active tracker indicator badges (`Tracker: ByteTrack [Auto]`) and manual tracker selector dropdown menus in `/dashboard` and `/video-test`.
+* **Full Unit Test Verification**: Expanded Pytest suite to 26/26 passing unit tests covering `SceneAnalyzer`, `MultiTrackerEngine`, and `Detector.change_tracker_mode()`.
+
+

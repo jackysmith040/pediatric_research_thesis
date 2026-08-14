@@ -37,13 +37,24 @@ def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optiona
                         # Native browser MJPEG handling. No WebSockets, zero UI overhead.
                         ui.element('img').props('src="/camera/stream"').classes('absolute inset-0 w-full h-full object-cover z-10')
                         
-                        # Source Status Overlay Badge
+                        # Source & Tracker Overlay Badges
                         with ui.row().classes('absolute bottom-4 left-4 z-20 items-center gap-2 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700'):
                             ui.element('span').classes('w-2 h-2 rounded-full bg-emerald-400 animate-pulse')
                             active_source_label = ui.label('Webcam 0').classes('text-xs font-medium text-slate-200')
 
+                        with ui.row().classes('absolute bottom-4 right-4 z-20 items-center gap-2 bg-indigo-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-indigo-700/50'):
+                            ui.icon('tune').classes('text-xs text-indigo-400')
+                            tracker_badge = ui.label('ByteTrack [Auto]').classes('text-xs font-mono font-medium text-indigo-300')
+
+                        def update_tracker_badge():
+                            det = get_detector()
+                            if det and hasattr(det, 'current_tracker_status_label'):
+                                tracker_badge.text = det.current_tracker_status_label
+
+                        ui.timer(1.0, update_tracker_badge)
+
                     # Controls directly under Video Feed
-                    with ui.row().classes('w-full items-center justify-between gap-4 p-2 z-30'):
+                    with ui.row().classes('w-full items-center justify-between gap-4 p-2 z-30 flex-wrap sm:flex-nowrap'):
                         async def turn_on_webcam():
                             detector = get_detector()
                             if not detector:
@@ -62,11 +73,34 @@ def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optiona
 
                         btn_webcam = ui.button('Turn On Live Camera', on_click=turn_on_webcam) \
                             .props('unelevated rounded icon=videocam') \
-                            .classes('px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-950/50')
+                            .classes('px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50')
+
+                        # Tracker Algorithm Selector Dropdown
+                        async def on_tracker_change(e):
+                            det = get_detector()
+                            if not det:
+                                return
+                            success, msg = det.change_tracker_mode(e.value)
+                            if success:
+                                tracker_badge.text = det.current_tracker_status_label
+                                ui.notify(msg, type='positive', icon='tune', timeout=3000)
+
+                        ui.select(
+                            options={
+                                'auto': '⚡ Auto Switch (Situation Aware)',
+                                'bytetrack': '🎯 ByteTrack (Baseline)',
+                                'botsort': '📹 BoT-SORT (Motion Comp)',
+                                'ocsort': '🔄 OC-SORT (Non-Linear)',
+                                'fasttracker': '👥 FastTracker (Occlusion Aware)'
+                            },
+                            value='auto',
+                            on_change=on_tracker_change
+                        ).props('dense outlined dark rounded').classes('text-xs bg-slate-900 border-slate-700 min-w-[210px]')
 
                         ui.button('External Video Testing', on_click=lambda: ui.navigate.to('/video-test')) \
                             .props('outline rounded icon=science') \
-                            .classes('px-6 py-2.5 border-slate-700 text-indigo-400 hover:bg-slate-800 hover:text-indigo-300 font-bold text-sm')
+                            .classes('px-5 py-2 border-slate-700 text-indigo-400 hover:bg-slate-800 hover:text-indigo-300 font-bold text-xs')
+
 
                 # Right Column (Telemetry - compact sidebar)
                 with ui.column().classes('flex-[1] h-full flex flex-col gap-4 overflow-y-auto min-w-[280px]'):
