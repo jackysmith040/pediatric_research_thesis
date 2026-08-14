@@ -32,15 +32,23 @@ class Settings(BaseSettings):
     CLAHE_TILE_GRID_SIZE: int = int(os.getenv("CLAHE_TILE_GRID_SIZE", "8"))
 
     # Roboflow Supervision & ByteTrack Configuration
-    BYTETRACK_TRACK_THRESH: float = float(os.getenv("BYTETRACK_TRACK_THRESH", "0.45"))
+    BYTETRACK_TRACK_THRESH: float = float(os.getenv("BYTETRACK_TRACK_THRESH", "0.30"))
     BYTETRACK_MATCH_THRESH: float = float(os.getenv("BYTETRACK_MATCH_THRESH", "0.8"))
     BYTETRACK_FRAME_RATE: int = int(os.getenv("BYTETRACK_FRAME_RATE", "30"))
+
+    # Perspective Normalization & Temporal Class Voting Configuration
+    ENABLE_PERSPECTIVE_CORRECTION: bool = os.getenv("ENABLE_PERSPECTIVE_CORRECTION", "true").lower() in ("true", "1", "yes")
+    PERSPECTIVE_HORIZON_Y: float = float(os.getenv("PERSPECTIVE_HORIZON_Y", "0.20"))
+    PERSPECTIVE_FAR_HEIGHT_RATIO: float = float(os.getenv("PERSPECTIVE_FAR_HEIGHT_RATIO", "0.22"))
+    PERSPECTIVE_NEAR_HEIGHT_RATIO: float = float(os.getenv("PERSPECTIVE_NEAR_HEIGHT_RATIO", "0.55"))
+    TEMPORAL_VOTING_WINDOW: int = int(os.getenv("TEMPORAL_VOTING_WINDOW", "15"))
 
     # Multi-Tracker & Auto-Switching Configuration
     DEFAULT_TRACKER_MODE: str = os.getenv("DEFAULT_TRACKER_MODE", "auto")
     AUTO_SWITCH_STABILIZATION_SECONDS: float = float(os.getenv("AUTO_SWITCH_STABILIZATION_SECONDS", "3.0"))
     CAMERA_MOTION_THRESHOLD: float = float(os.getenv("CAMERA_MOTION_THRESHOLD", "12.0"))
     OCCLUSION_DENSITY_THRESHOLD: float = float(os.getenv("OCCLUSION_DENSITY_THRESHOLD", "0.25"))
+
 
 
     # Class mappings (expbetter.pt trained weights: 0=Adult, 1=Child)

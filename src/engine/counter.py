@@ -18,13 +18,16 @@ class Counter:
         
     @property
     def current_adults(self) -> int:
-        active_ids = self.tracker_manager.get_active_ids()
-        return sum(1 for class_id in active_ids.values() if class_id == settings.ADULT_CLASS_ID)
+        active_ids = self.tracker_manager.get_active_ids(max_idle_seconds=1.5)
+        adult_cls = getattr(settings, 'ADULT_CLASS_ID', 0)
+        return sum(1 for class_id in active_ids.values() if class_id == adult_cls)
 
     @property
     def current_children(self) -> int:
-        active_ids = self.tracker_manager.get_active_ids()
-        return sum(1 for class_id in active_ids.values() if class_id == settings.CHILD_CLASS_ID)
+        active_ids = self.tracker_manager.get_active_ids(max_idle_seconds=1.5)
+        child_cls = getattr(settings, 'CHILD_CLASS_ID', 1)
+        return sum(1 for class_id in active_ids.values() if class_id == child_cls)
+
 
     def process_detection(self, track_id: int, class_id: int, box):
         """

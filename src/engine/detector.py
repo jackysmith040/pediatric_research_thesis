@@ -265,13 +265,16 @@ class Detector:
                 # Mirror flip for live webcam, original orientation for streams & video files
                 self.latest_frame = cv2.flip(frame, 1) if self.is_webcam else frame
                 if not self.is_webcam:
-                    time.sleep(0.015)  # Pace local file reads smoothly
+                    file_fps = float(self.cap.get(cv2.CAP_PROP_FPS)) if self.cap else 30.0
+                    delay = 1.0 / max(10.0, file_fps) if file_fps > 0 else 0.033
+                    time.sleep(delay)
             else:
                 # EOF reached on video stream/file -> rewind to frame 0 for continuous looping test
                 with self.source_lock:
                     if self.cap is not None and not self.is_webcam:
                         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 time.sleep(0.01)
+
 
     def _yolo_loop(self):
         """Continuously run CLAHE preprocessing, YOLO inference, and Supervision ByteTrack multi-object tracking."""
@@ -329,14 +332,9 @@ class Detector:
                     child_cls = getattr(self, 'child_class_id', settings.CHILD_CLASS_ID)
                     adult_cls = getattr(self, 'adult_class_id', settings.ADULT_CLASS_ID)
 
-                    # For single-class person models (e.g. COCO 0='person'), apply scale height heuristic
-                    if self.uses_coco_person and raw_class_id == 0:
-                        box_h = float(box[3] - box[1])
-                        # If person bounding box is under 40% of frame height, classify as Child (pediatric)
-                        if box_h / max(1.0, frame_h) < 0.40:
-                            target_class_id = child_cls
-                        else:
-                            target_class_id = adult_cls
+                    # Apply Ground-Plane Perspective Normalization for single-class or perspective correction
+                    if self.uses_coco_person or getattr(settings, 'ENABLE_PERSPECTIVE_CORRECTION', True):
+                        target_class_id = self.calculate_perspective_class(box, frame_h, raw_class_id, child_cls, adult_cls)
 
                     if target_class_id in [child_cls, adult_cls]:
                         resolved_id = self._resolve_track_id(box, raw_track_id, target_class_id, claimed_ids)
@@ -347,6 +345,60 @@ class Detector:
             with self.box_lock:
                 self.latest_boxes = new_boxes
 
+            # Pre-encode annotated JPEG frame for zero-latency 30 FPS streaming
+            try:
+                annotated = frame.copy()
+                with self.box_lock:
+                    current_boxes = list(self.latest_boxes)
+                    
+                sorted_boxes = sorted(current_boxes, key=lambda b: float(b[0][0]))
+                class_counters = defaultdict(int)
+                box_indices = {}
+                for box, track_id, class_id in sorted_boxes:
+                    class_counters[class_id] += 1
+                    box_indices[id(box)] = class_counters[class_id]
+
+                for box, track_id, class_id in current_boxes:
+                    idx = box_indices.get(id(box))
+                    self.draw_bbox(annotated, box, track_id, class_id, class_index=idx)
+                    if track_id != -1:
+                        self.draw_trail(annotated, box, track_id, class_id)
+
+                ret, buffer = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                if ret:
+                    self.latest_jpeg_bytes = buffer.tobytes()
+            except Exception as e:
+                logger.error(f"Error pre-encoding JPEG frame: {e}")
+
+    @staticmethod
+    def calculate_perspective_class(box: np.ndarray, frame_h: float, raw_class_id: int, child_cls: int, adult_cls: int) -> int:
+        """
+        Calculates ground-plane perspective normalized class.
+        In 2D wall/ceiling camera feeds, vertical position y_bottom correlates with ground distance Z.
+        Distant adults (near y_horizon) have small pixel height. Perspective normalization scales expected height.
+        """
+        if not getattr(settings, 'ENABLE_PERSPECTIVE_CORRECTION', True):
+            return raw_class_id
+
+        y_bottom = float(box[3]) / max(1.0, frame_h)
+        box_h = float(box[3] - box[1]) / max(1.0, frame_h)
+        box_w = float(box[2] - box[0]) / max(1.0, frame_h)
+
+        horizon_y = getattr(settings, 'PERSPECTIVE_HORIZON_Y', 0.20)
+        far_scale = getattr(settings, 'PERSPECTIVE_FAR_HEIGHT_RATIO', 0.22)
+        near_scale = getattr(settings, 'PERSPECTIVE_NEAR_HEIGHT_RATIO', 0.55)
+
+        norm_y = max(0.0, min(1.0, (y_bottom - horizon_y) / max(0.01, 1.0 - horizon_y)))
+        expected_adult_h = far_scale + norm_y * (near_scale - far_scale)
+        norm_ratio = box_h / max(0.01, expected_adult_h)
+        aspect_ratio = box_w / max(0.01, box_h)
+
+        if norm_ratio < 0.72:
+            return child_cls
+        elif norm_ratio >= 0.85:
+            return adult_cls
+        else:
+            return child_cls if aspect_ratio > 0.44 else adult_cls
 
     def draw_bbox(self, frame, box, track_id, class_id, class_index=None):
         """Draw modern sci-fi bounding box with corner brackets, translucent fill, and sequential count label."""
@@ -417,33 +469,18 @@ class Detector:
 
     def get_latest_jpeg_bytes(self) -> bytes:
         """
-        Returns a single MJPEG encoded frame with synchronized bounding boxes.
-        Runs independently of YOLO to guarantee smooth 30 FPS playback.
+        Returns pre-encoded MJPEG frame buffer instantly for zero-latency 30 FPS playback.
         """
+        if getattr(self, 'latest_jpeg_bytes', None) is not None:
+            return self.latest_jpeg_bytes
+
         if self.latest_frame is None:
             return None
-            
+
         frame = self.latest_frame.copy()
-        
-        with self.box_lock:
-            current_boxes = list(self.latest_boxes)
-            
-        # Compute 1-based sequential indices per class sorted left-to-right (x1 coordinate)
-        sorted_boxes = sorted(current_boxes, key=lambda b: float(b[0][0]))
-        class_counters = defaultdict(int)
-        box_indices = {}
-        for box, track_id, class_id in sorted_boxes:
-            class_counters[class_id] += 1
-            box_indices[id(box)] = class_counters[class_id]
-
-        for box, track_id, class_id in current_boxes:
-            idx = box_indices.get(id(box))
-            self.draw_bbox(frame, box, track_id, class_id, class_index=idx)
-            if track_id != -1:
-                self.draw_trail(frame, box, track_id, class_id)
-
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         return buffer.tobytes() if ret else None
+
 
     def release(self):
         self.running = False

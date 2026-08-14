@@ -108,12 +108,28 @@ class MultiTrackerEngine:
         self.mode = initial_mode.lower()  # "auto" or specific tracker key
         self.active_tracker_name = "bytetrack"
         
-        # Instantiate Supervision ByteTrack tracker
+        # Instantiate Supervision trackers with specialized parameter profiles
         self._trackers = {
-            "bytetrack": self._create_bytetrack_instance(),
-            "botsort": self._create_bytetrack_instance(),     # Robust ByteTrack variant with motion parameters
-            "ocsort": self._create_bytetrack_instance(),      # Observation-centric ByteTrack fallback
-            "fasttracker": self._create_bytetrack_instance()  # Fast occlusion-aware ByteTrack fallback
+            "bytetrack": self._create_tracker_instance(
+                track_thresh=settings.BYTETRACK_TRACK_THRESH,
+                match_thresh=settings.BYTETRACK_MATCH_THRESH,
+                lost_buffer=30
+            ),
+            "botsort": self._create_tracker_instance(
+                track_thresh=max(0.20, settings.BYTETRACK_TRACK_THRESH - 0.05),
+                match_thresh=0.70,
+                lost_buffer=45  # Extended buffer for camera motion compensation
+            ),
+            "ocsort": self._create_tracker_instance(
+                track_thresh=max(0.20, settings.BYTETRACK_TRACK_THRESH - 0.05),
+                match_thresh=0.60,
+                lost_buffer=30  # Non-linear motion recovery
+            ),
+            "fasttracker": self._create_tracker_instance(
+                track_thresh=max(0.15, settings.BYTETRACK_TRACK_THRESH - 0.10),
+                match_thresh=0.50,
+                lost_buffer=60  # Occlusion-aware high density buffer
+            )
         }
         
         self.prev_gray_frame: Optional[np.ndarray] = None
@@ -121,12 +137,14 @@ class MultiTrackerEngine:
         self.last_motion_score: float = 0.0
         self.last_occlusion_score: float = 0.0
 
-    def _create_bytetrack_instance(self) -> sv.ByteTrack:
+    def _create_tracker_instance(self, track_thresh: float, match_thresh: float, lost_buffer: int = 30) -> sv.ByteTrack:
         return sv.ByteTrack(
-            track_activation_threshold=settings.BYTETRACK_TRACK_THRESH,
-            minimum_matching_threshold=settings.BYTETRACK_MATCH_THRESH,
+            track_activation_threshold=float(track_thresh),
+            minimum_matching_threshold=float(match_thresh),
+            lost_track_buffer=int(lost_buffer),
             frame_rate=settings.BYTETRACK_FRAME_RATE
         )
+
 
     def set_mode(self, new_mode: str) -> Tuple[bool, str]:
         """Sets engine operating mode ('auto' or explicit tracker key)."""
