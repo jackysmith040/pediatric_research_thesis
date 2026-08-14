@@ -222,11 +222,16 @@ class Detector:
                 if 'person' in str(self.names.get(0, '')).lower() and len(self.names) > 10:
                     self.uses_coco_person = True
 
+                if hasattr(self, 'counter') and self.counter is not None:
+                    self.counter.child_class_id = self.child_class_id
+                    self.counter.adult_class_id = self.adult_class_id
+
                 filename = os.path.basename(selected_path)
                 self.current_model_label = filename
                 
             logger.info(f"Successfully initialized model '{filename}' (Child Class ID: {self.child_class_id}, Adult Class ID: {self.adult_class_id})")
             return True, f"Loaded model: {filename}"
+
         except Exception as e:
             err_msg = f"Failed to load model from {target_path}: {e}"
             logger.error(err_msg)
@@ -294,13 +299,16 @@ class Detector:
             self.counter.cleanup_lost_tracks()
 
             # Run YOLO prediction
-            results = self.model.predict(
-                proc_frame, 
-                conf=settings.PEDIATRIC_CONF_THRESHOLD,
-                iou=settings.IOU_THRESHOLD,
-                imgsz=480,
-                verbose=False
-            )
+            predict_kwargs = {
+                "conf": settings.PEDIATRIC_CONF_THRESHOLD,
+                "iou": settings.IOU_THRESHOLD,
+                "imgsz": 480,
+                "verbose": False
+            }
+            if getattr(self, 'uses_coco_person', False):
+                predict_kwargs["classes"] = [0]  # Restrict COCO predictions strictly to person class 0
+
+            results = self.model.predict(proc_frame, **predict_kwargs)
 
             new_boxes = []
             if results and len(results) > 0 and len(results[0].boxes) > 0:
@@ -375,30 +383,48 @@ class Detector:
         """
         Calculates ground-plane perspective normalized class.
         In 2D wall/ceiling camera feeds, vertical position y_bottom correlates with ground distance Z.
-        Distant adults (near y_horizon) have small pixel height. Perspective normalization scales expected height.
+        Incorporate sitting-pose aspect ratio compensation (w/h > 0.55) and non-human geometry filtering.
         """
         if not getattr(settings, 'ENABLE_PERSPECTIVE_CORRECTION', True):
+            return raw_class_id
+
+        # Ignore non-target raw classes
+        if raw_class_id not in [child_cls, adult_cls, 0]:
             return raw_class_id
 
         y_bottom = float(box[3]) / max(1.0, frame_h)
         box_h = float(box[3] - box[1]) / max(1.0, frame_h)
         box_w = float(box[2] - box[0]) / max(1.0, frame_h)
 
+        if box_h <= 0.01 or box_w <= 0.01:
+            return raw_class_id
+
+        aspect_ratio = box_w / max(0.001, box_h)
+
+        # Reject non-person geometry noise (e.g. extremely wide bench or narrow furniture edge)
+        if aspect_ratio > 2.5 or aspect_ratio < 0.15:
+            return -1
+
         horizon_y = getattr(settings, 'PERSPECTIVE_HORIZON_Y', 0.20)
         far_scale = getattr(settings, 'PERSPECTIVE_FAR_HEIGHT_RATIO', 0.22)
         near_scale = getattr(settings, 'PERSPECTIVE_NEAR_HEIGHT_RATIO', 0.55)
 
+        # Pose-aware height compensation: Sitting/bending adults shorten vertical height by ~35-50%
+        effective_h = box_h
+        if aspect_ratio > 0.55:
+            effective_h = box_h * 1.50
+
         norm_y = max(0.0, min(1.0, (y_bottom - horizon_y) / max(0.01, 1.0 - horizon_y)))
         expected_adult_h = far_scale + norm_y * (near_scale - far_scale)
-        norm_ratio = box_h / max(0.01, expected_adult_h)
-        aspect_ratio = box_w / max(0.01, box_h)
+        norm_ratio = effective_h / max(0.01, expected_adult_h)
 
-        if norm_ratio < 0.72:
+        if norm_ratio < 0.70:
             return child_cls
         elif norm_ratio >= 0.85:
             return adult_cls
         else:
-            return child_cls if aspect_ratio > 0.44 else adult_cls
+            return child_cls if aspect_ratio > 0.60 else adult_cls
+
 
     def draw_bbox(self, frame, box, track_id, class_id, class_index=None):
         """Draw modern sci-fi bounding box with corner brackets, translucent fill, and sequential count label."""

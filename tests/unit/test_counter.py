@@ -100,3 +100,16 @@ def test_temporal_debouncing_expiration(mock_counter):
     
     # Total SHOULD increase because the lost centroid expired temporally
     assert mock_counter.state.total_daily_adults == 2
+
+def test_dynamic_class_mapping(mock_counter):
+    """Test that Counter dynamically respects child_class_id and adult_class_id overrides (e.g. from fine-tuned models)."""
+    mock_counter.child_class_id = 0
+    mock_counter.adult_class_id = 1
+    
+    box = (10, 10, 30, 30)
+    mock_counter.process_detection(track_id=1, class_id=0, box=box)
+    
+    assert mock_counter.current_children == 1
+    assert mock_counter.current_adults == 0
+    assert mock_counter.state.total_daily_children == 1
+

@@ -134,6 +134,30 @@ def test_change_model_success(mock_detector, monkeypatch):
     assert mock_detector.adult_class_id == 1
     assert "pediatric-model.pt" in msg
 
+def test_perspective_normalization_sitting_pose():
+    import numpy as np
+    # Box for a sitting adult: y_bottom=0.8, height=0.35, width=0.25 (aspect_ratio = 0.71)
+    box_sitting_adult = np.array([100, 450, 350, 800])  # h=350, w=250 -> w/h = 0.71
+    frame_h = 1000.0
+    
+    cls = Detector.calculate_perspective_class(
+        box_sitting_adult, frame_h, raw_class_id=0, child_cls=1, adult_cls=0
+    )
+    # Sitting adult with aspect ratio compensation should be classified as Adult (0)
+    assert cls == 0
+
+def test_calculate_perspective_class_rejects_non_person():
+    import numpy as np
+    # Extremely wide box (e.g. bench or chair seat) -> w=500, h=50 -> w/h = 10.0
+    wide_box = np.array([0, 100, 500, 150])
+    frame_h = 1000.0
+    
+    res = Detector.calculate_perspective_class(
+        wide_box, frame_h, raw_class_id=0, child_cls=1, adult_cls=0
+    )
+    assert res == -1
+
+
 
 
 

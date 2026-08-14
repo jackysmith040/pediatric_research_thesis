@@ -15,18 +15,18 @@ class Counter:
         self.lost_centroids = [] # list of (cx, cy, timestamp, class_id)
         self.spatial_threshold = 150 # pixels (tune based on resolution)
         self.temporal_threshold = 5.0 # seconds
+        self.adult_class_id = getattr(settings, 'ADULT_CLASS_ID', 0)
+        self.child_class_id = getattr(settings, 'CHILD_CLASS_ID', 1)
         
     @property
     def current_adults(self) -> int:
         active_ids = self.tracker_manager.get_active_ids(max_idle_seconds=1.5)
-        adult_cls = getattr(settings, 'ADULT_CLASS_ID', 0)
-        return sum(1 for class_id in active_ids.values() if class_id == adult_cls)
+        return sum(1 for class_id in active_ids.values() if class_id == self.adult_class_id)
 
     @property
     def current_children(self) -> int:
         active_ids = self.tracker_manager.get_active_ids(max_idle_seconds=1.5)
-        child_cls = getattr(settings, 'CHILD_CLASS_ID', 1)
-        return sum(1 for class_id in active_ids.values() if class_id == child_cls)
+        return sum(1 for class_id in active_ids.values() if class_id == self.child_class_id)
 
 
     def process_detection(self, track_id: int, class_id: int, box):
@@ -55,10 +55,11 @@ class Counter:
                         break
             
             if not matched:
-                if class_id == settings.ADULT_CLASS_ID:
+                if class_id == self.adult_class_id:
                     self.state.total_daily_adults += 1
-                elif class_id == settings.CHILD_CLASS_ID:
+                elif class_id == self.child_class_id:
                     self.state.total_daily_children += 1
+
         
         self.active_centroids[track_id] = (cx, cy, class_id)
                 
