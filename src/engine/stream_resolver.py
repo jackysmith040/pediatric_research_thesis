@@ -57,10 +57,23 @@ class StreamResolver:
         source_str = str(source_input).strip()
 
         if not source_str or source_str == "0":
-            cap = cv2.VideoCapture(0)
-            if cap.isOpened():
-                return cap, "Webcam 0", None
-            return None, "Webcam 0", "Could not open default camera (Webcam 0)."
+            try:
+                cap = cv2.VideoCapture(0)
+                if cap and cap.isOpened():
+                    return cap, "Webcam 0", None
+            except Exception as e:
+                logger.warning(f"Webcam 0 open failed: {e}")
+
+            # Fallback to local hospital video file if webcam 0 is unavailable
+            if os.path.exists(LOCAL_HOSPITAL_VIDEO_PATH):
+                fallback_cap = cv2.VideoCapture(LOCAL_HOSPITAL_VIDEO_PATH)
+                if fallback_cap and fallback_cap.isOpened():
+                    filename = os.path.basename(LOCAL_HOSPITAL_VIDEO_PATH)
+                    logger.info(f"Webcam 0 unavailable. Falling back to local hospital video feed: {filename}")
+                    return fallback_cap, f"Hospital OPD Video ({filename})", None
+
+            return None, "Webcam 0", "Could not open default camera (Webcam 0) or local fallback video."
+
 
         # Check numeric camera index (e.g. "1", "2")
         if source_str.isdigit():

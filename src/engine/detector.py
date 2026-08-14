@@ -519,12 +519,19 @@ class Detector:
         if getattr(self, 'latest_jpeg_bytes', None) is not None:
             return self.latest_jpeg_bytes
 
-        if self.latest_frame is None:
-            return None
+        if getattr(self, 'latest_frame', None) is not None:
+            frame = self.latest_frame.copy()
+            ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if ret:
+                return buffer.tobytes()
 
-        frame = self.latest_frame.copy()
-        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-        return buffer.tobytes() if ret else None
+        # Fallback synthetic dark placeholder JPEG during initial camera warm-up
+        placeholder = np.zeros((480, 854, 3), dtype=np.uint8)
+        cv2.putText(placeholder, "INITIALIZING CLINICAL MONITOR...", (180, 240), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (120, 180, 255), 2, cv2.LINE_AA)
+        ret, buffer = cv2.imencode('.jpg', placeholder, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        return buffer.tobytes() if ret else b""
+
 
 
     def release(self):

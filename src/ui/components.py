@@ -5,10 +5,11 @@ from contextlib import contextmanager
 def page_container(scrollable: bool = False):
     """A standard full-screen container with the dark mode background."""
     ui.colors(primary='#4f46e5') # Indigo-600
-    ui.query('.nicegui-content').classes('p-0 m-0 w-full h-full')
+    ui.query('html, body, .nicegui-content').classes('p-0 m-0 w-full h-full min-h-screen bg-slate-950')
     overflow_class = 'overflow-x-hidden min-h-screen' if scrollable else 'overflow-hidden h-screen'
     with ui.column().classes(f'w-full {overflow_class} bg-slate-950 p-0 m-0 text-slate-100 gap-0 flex-nowrap') as container:
         yield container
+
 
 @contextmanager
 def dashboard_card(max_width='max-w-2xl'):
