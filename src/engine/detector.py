@@ -84,9 +84,11 @@ class Detector:
         self.latest_frame = None
         self.latest_boxes = []
         self.latest_jpeg_bytes = None
+        self.frame_count = 0
         self.box_lock = threading.Lock()
         self.running = True
         self._synthetic_id_counter = 10000
+
         
         # Thread 1: Camera Capture
         self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -283,6 +285,33 @@ class Detector:
 
                 # Mirror flip for live webcam, original orientation for streams & video files
                 self.latest_frame = cv2.flip(frame, 1) if self.is_webcam else frame
+                
+                # Pre-encode annotated JPEG frame immediately for zero-latency video streaming
+                try:
+                    annotated = self.latest_frame.copy()
+                    with self.box_lock:
+                        current_boxes = list(self.latest_boxes)
+                        
+                    sorted_boxes = sorted(current_boxes, key=lambda b: float(b[0][0]))
+                    class_counters = defaultdict(int)
+                    box_indices = {}
+                    for box, track_id, class_id in sorted_boxes:
+                        class_counters[class_id] += 1
+                        box_indices[id(box)] = class_counters[class_id]
+
+                    for box, track_id, class_id in current_boxes:
+                        idx = box_indices.get(id(box))
+                        self.draw_bbox(annotated, box, track_id, class_id, class_index=idx)
+                        if track_id != -1:
+                            self.draw_trail(annotated, box, track_id, class_id)
+
+                    ret_jpg, buffer = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                    if ret_jpg:
+                        self.latest_jpeg_bytes = buffer.tobytes()
+                        self.frame_count += 1
+                except Exception as e:
+                    logger.error(f"Error rendering frame in capture loop: {e}")
+
                 if not self.is_webcam:
                     file_fps = float(self.cap.get(cv2.CAP_PROP_FPS)) if self.cap else 30.0
                     delay = 1.0 / max(10.0, file_fps) if file_fps > 0 else 0.033
@@ -367,30 +396,6 @@ class Detector:
             with self.box_lock:
                 self.latest_boxes = new_boxes
 
-            # Pre-encode annotated JPEG frame for zero-latency 30 FPS streaming
-            try:
-                annotated = frame.copy()
-                with self.box_lock:
-                    current_boxes = list(self.latest_boxes)
-                    
-                sorted_boxes = sorted(current_boxes, key=lambda b: float(b[0][0]))
-                class_counters = defaultdict(int)
-                box_indices = {}
-                for box, track_id, class_id in sorted_boxes:
-                    class_counters[class_id] += 1
-                    box_indices[id(box)] = class_counters[class_id]
-
-                for box, track_id, class_id in current_boxes:
-                    idx = box_indices.get(id(box))
-                    self.draw_bbox(annotated, box, track_id, class_id, class_index=idx)
-                    if track_id != -1:
-                        self.draw_trail(annotated, box, track_id, class_id)
-
-                ret, buffer = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-                if ret:
-                    self.latest_jpeg_bytes = buffer.tobytes()
-            except Exception as e:
-                logger.error(f"Error pre-encoding JPEG frame: {e}")
 
     @staticmethod
     def calculate_perspective_class(box: np.ndarray, frame_h: float, raw_class_id: int, child_cls: int, adult_cls: int) -> int:

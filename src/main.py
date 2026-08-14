@@ -35,18 +35,22 @@ from fastapi.responses import StreamingResponse
 @app.get('/camera/stream')
 async def camera_stream():
     async def generate_frames():
+        last_frame_count = -1
         while True:
             if detector is None:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.05)
                 continue
             
-            frame_bytes = await run.io_bound(detector.get_latest_jpeg_bytes)
-            if frame_bytes:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                await asyncio.sleep(0.033)
-            else:
-                await asyncio.sleep(0.033)
+            current_count = getattr(detector, 'frame_count', 0)
+            if current_count != last_frame_count:
+                frame_bytes = detector.get_latest_jpeg_bytes()
+                if frame_bytes:
+                    last_frame_count = current_count
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                    await asyncio.sleep(0.005)
+                    continue
+            await asyncio.sleep(0.015)
 
     return StreamingResponse(
         generate_frames(), 
@@ -56,6 +60,7 @@ async def camera_stream():
             "Pragma": "no-cache"
         }
     )
+
 
 # Register UI Pages
 register_landing()

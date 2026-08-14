@@ -18,9 +18,12 @@ def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optiona
     def dashboard():
         # Update progress bars manually since linear_progress value isn't auto-bound nicely from models
         def update_progress():
-            total_p = max(1, state.total_daily_adults + state.total_daily_children)
-            p_child.value = state.total_daily_children / total_p
-            p_adult.value = state.total_daily_adults / total_p
+            try:
+                total_p = max(1, state.total_daily_adults + state.total_daily_children)
+                p_child.value = state.total_daily_children / total_p
+                p_adult.value = state.total_daily_adults / total_p
+            except Exception:
+                pass
 
         ui.timer(1.0, update_progress)
 
@@ -47,11 +50,15 @@ def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optiona
                             tracker_badge = ui.label('ByteTrack [Auto]').classes('text-xs font-mono font-medium text-indigo-300')
 
                         def update_tracker_badge():
-                            det = get_detector()
-                            if det and hasattr(det, 'current_tracker_status_label'):
-                                tracker_badge.text = det.current_tracker_status_label
+                            try:
+                                det = get_detector()
+                                if det and hasattr(det, 'current_tracker_status_label'):
+                                    tracker_badge.text = det.current_tracker_status_label
+                            except Exception:
+                                pass
 
                         ui.timer(1.0, update_tracker_badge)
+
 
                     # Controls directly under Video Feed
                     with ui.row().classes('w-full items-center justify-between gap-4 p-2 z-30 flex-wrap sm:flex-nowrap'):

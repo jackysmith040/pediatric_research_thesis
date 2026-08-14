@@ -36,11 +36,15 @@ def register_evaluation(state: TelemetryState, get_detector: Callable[[], Option
                             tracker_badge = ui.label('ByteTrack [Auto]').classes('text-xs font-mono font-medium text-indigo-300')
 
                         def update_tracker_badge():
-                            det = get_detector()
-                            if det and hasattr(det, 'current_tracker_status_label'):
-                                tracker_badge.text = det.current_tracker_status_label
+                            try:
+                                det = get_detector()
+                                if det and hasattr(det, 'current_tracker_status_label'):
+                                    tracker_badge.text = det.current_tracker_status_label
+                            except Exception:
+                                pass
 
                         ui.timer(1.0, update_tracker_badge)
+
 
                     # Video Source Switcher Card
                     with ui.card().classes('w-full p-6 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col gap-4 z-30 shadow-xl'):
