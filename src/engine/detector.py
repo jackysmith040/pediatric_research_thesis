@@ -268,7 +268,9 @@ class Detector:
 
     def _capture_loop(self):
         """Continuously drain buffer and stream frames. Auto-loops finite video files/streams."""
+
         while self.running:
+            t_start = time.time()
             with self.source_lock:
                 if self.cap is None or not self.cap.isOpened():
                     time.sleep(0.05)
@@ -314,8 +316,10 @@ class Detector:
 
                 if not self.is_webcam:
                     file_fps = float(self.cap.get(cv2.CAP_PROP_FPS)) if self.cap else 30.0
-                    delay = 1.0 / max(10.0, file_fps) if file_fps > 0 else 0.033
-                    time.sleep(delay)
+                    target_delay = 1.0 / max(10.0, file_fps) if file_fps > 0 else 0.033
+                    t_elapsed = time.time() - t_start
+                    remaining_delay = max(0.001, target_delay - t_elapsed)
+                    time.sleep(remaining_delay)
             else:
                 # EOF reached on video stream/file -> rewind to frame 0 for continuous looping test
                 with self.source_lock:
@@ -341,9 +345,10 @@ class Detector:
             self.counter.tracker_manager.clean_expired_ids()
             self.counter.cleanup_lost_tracks()
 
-            # Run YOLO prediction
+            # Run YOLO prediction (optimal conf threshold per model type)
+            conf_thresh = settings.PEDIATRIC_CONF_THRESHOLD if self.uses_coco_person else min(0.25, settings.PEDIATRIC_CONF_THRESHOLD)
             predict_kwargs = {
-                "conf": settings.PEDIATRIC_CONF_THRESHOLD,
+                "conf": conf_thresh,
                 "iou": settings.IOU_THRESHOLD,
                 "imgsz": 480,
                 "verbose": False
@@ -383,11 +388,11 @@ class Detector:
                     child_cls = getattr(self, 'child_class_id', settings.CHILD_CLASS_ID)
                     adult_cls = getattr(self, 'adult_class_id', settings.ADULT_CLASS_ID)
 
-                    # Apply Ground-Plane Perspective Normalization for single-class or perspective correction
-                    if self.uses_coco_person or getattr(settings, 'ENABLE_PERSPECTIVE_CORRECTION', True):
+                    # Apply Ground-Plane Perspective Normalization ONLY for generic COCO person models
+                    if self.uses_coco_person:
                         target_class_id = self.calculate_perspective_class(box, frame_h, raw_class_id, child_cls, adult_cls)
 
-                    if target_class_id in [child_cls, adult_cls]:
+                    if target_class_id in [child_cls, adult_cls] or target_class_id == 0:
                         resolved_id = self._resolve_track_id(box, raw_track_id, target_class_id, claimed_ids)
                         claimed_ids.add(resolved_id)
                         self.counter.process_detection(resolved_id, target_class_id, box)
@@ -395,6 +400,7 @@ class Detector:
             
             with self.box_lock:
                 self.latest_boxes = new_boxes
+
 
 
     @staticmethod
