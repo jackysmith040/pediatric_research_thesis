@@ -75,6 +75,28 @@ def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optiona
                             .props('unelevated rounded icon=videocam') \
                             .classes('px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50')
 
+                        # Model Weights Selector Dropdown
+                        async def on_model_change(e):
+                            det = get_detector()
+                            if not det:
+                                return
+                            success, msg = await run.io_bound(lambda: det.change_model(e.value))
+                            if success:
+                                ui.notify(f'AI Model updated: {msg}', type='positive', icon='psychology', timeout=3000)
+                            else:
+                                ui.notify(f'Model load error: {msg}', type='negative', icon='error')
+
+                        ui.select(
+                            options={
+                                'models/fine_tuned/pediatric-model.pt': '🧠 Pediatric Fine-Tuned Model',
+                                'models/fine_tuned/pediatric-kids-only.pt': '👶 Kids-Only Model',
+                                'models/fine_tuned/pediatric-smaller-dataset-trained.pt': '🔬 Smaller Dataset Model',
+                                'models/base_model/yolo26s.pt': '⚡ Base YOLO26 Small Model'
+                            },
+                            value='models/fine_tuned/pediatric-model.pt',
+                            on_change=on_model_change
+                        ).props('dense outlined dark rounded').classes('text-xs bg-slate-900 border-slate-700 min-w-[210px]')
+
                         # Tracker Algorithm Selector Dropdown
                         async def on_tracker_change(e):
                             det = get_detector()
@@ -100,6 +122,7 @@ def register_dashboard(state: TelemetryState, get_detector: Callable[[], Optiona
                         ui.button('External Video Testing', on_click=lambda: ui.navigate.to('/video-test')) \
                             .props('outline rounded icon=science') \
                             .classes('px-5 py-2 border-slate-700 text-indigo-400 hover:bg-slate-800 hover:text-indigo-300 font-bold text-xs')
+
 
 
                 # Right Column (Telemetry - compact sidebar)

@@ -49,27 +49,51 @@ def register_evaluation(state: TelemetryState, get_detector: Callable[[], Option
                                 ui.icon('science').classes('text-indigo-400 text-xl')
                                 ui.label('Evaluation Video Source').classes('text-sm font-bold tracking-wider text-slate-200 uppercase')
                             
-                            # Tracker selector dropdown for evaluation lab
-                            async def on_eval_tracker_change(e):
-                                det = get_detector()
-                                if not det:
-                                    return
-                                success, msg = det.change_tracker_mode(e.value)
-                                if success:
-                                    tracker_badge.text = det.current_tracker_status_label
-                                    ui.notify(msg, type='positive', icon='tune', timeout=3000)
+                            with ui.row().classes('items-center gap-2 flex-wrap'):
+                                # Model selector dropdown for evaluation lab
+                                async def on_eval_model_change(e):
+                                    det = get_detector()
+                                    if not det:
+                                        return
+                                    success, msg = await run.io_bound(lambda: det.change_model(e.value))
+                                    if success:
+                                        ui.notify(f'AI Model updated: {msg}', type='positive', icon='psychology', timeout=3000)
+                                    else:
+                                        ui.notify(f'Model load error: {msg}', type='negative', icon='error')
 
-                            ui.select(
-                                options={
-                                    'auto': '⚡ Auto Switch (Situation Aware)',
-                                    'bytetrack': '🎯 ByteTrack (Baseline)',
-                                    'botsort': '📹 BoT-SORT (Motion Comp)',
-                                    'ocsort': '🔄 OC-SORT (Non-Linear)',
-                                    'fasttracker': '👥 FastTracker (Occlusion Aware)'
-                                },
-                                value='auto',
-                                on_change=on_eval_tracker_change
-                            ).props('dense outlined dark rounded').classes('text-xs bg-slate-950 border-slate-700 min-w-[210px]')
+                                ui.select(
+                                    options={
+                                        'models/fine_tuned/pediatric-model.pt': '🧠 Pediatric Fine-Tuned Model',
+                                        'models/fine_tuned/pediatric-kids-only.pt': '👶 Kids-Only Model',
+                                        'models/fine_tuned/pediatric-smaller-dataset-trained.pt': '🔬 Smaller Dataset Model',
+                                        'models/base_model/yolo26s.pt': '⚡ Base YOLO26 Small Model'
+                                    },
+                                    value='models/fine_tuned/pediatric-model.pt',
+                                    on_change=on_eval_model_change
+                                ).props('dense outlined dark rounded').classes('text-xs bg-slate-950 border-slate-700 min-w-[210px]')
+
+                                # Tracker selector dropdown for evaluation lab
+                                async def on_eval_tracker_change(e):
+                                    det = get_detector()
+                                    if not det:
+                                        return
+                                    success, msg = det.change_tracker_mode(e.value)
+                                    if success:
+                                        tracker_badge.text = det.current_tracker_status_label
+                                        ui.notify(msg, type='positive', icon='tune', timeout=3000)
+
+                                ui.select(
+                                    options={
+                                        'auto': '⚡ Auto Switch (Situation Aware)',
+                                        'bytetrack': '🎯 ByteTrack (Baseline)',
+                                        'botsort': '📹 BoT-SORT (Motion Comp)',
+                                        'ocsort': '🔄 OC-SORT (Non-Linear)',
+                                        'fasttracker': '👥 FastTracker (Occlusion Aware)'
+                                    },
+                                    value='auto',
+                                    on_change=on_eval_tracker_change
+                                ).props('dense outlined dark rounded').classes('text-xs bg-slate-950 border-slate-700 min-w-[210px]')
+
 
 
                         preset_options = {p['url']: p['name'] for p in PRESET_TEST_STREAMS}

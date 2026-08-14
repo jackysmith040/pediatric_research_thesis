@@ -10,7 +10,8 @@ import ultralytics.nn.tasks
 from collections import defaultdict
 from ultralytics import YOLO
 from ultralytics.utils.plotting import colors
-from src.engine.config import settings
+from src.engine.config import settings, PRESET_MODELS
+
 from src.engine.counter import Counter
 from typing import Generator
 
@@ -50,17 +51,10 @@ class Detector:
             return frame
     def __init__(self, counter: Counter):
         self.counter = counter
+        self.model_lock = threading.Lock()
         
-        # Determine model path
-        if os.path.exists(settings.MODEL_PATH):
-            logger.info(f"Loading custom model from {settings.MODEL_PATH}")
-            self.model = YOLO(settings.MODEL_PATH)
-        elif os.path.exists("models/yolov8n.pt"):
-            logger.warning(f"Model not found at {settings.MODEL_PATH}. Falling back to models/yolov8n.pt")
-            self.model = YOLO("models/yolov8n.pt")
-        else:
-            logger.warning(f"Model not found at {settings.MODEL_PATH}. Falling back to yolov8n.pt")
-            self.model = YOLO("yolov8n.pt")
+        # Initialize YOLO Model dynamically with fallback cascade
+        self._init_model(settings.MODEL_PATH)
 
         # Initialize Roboflow Supervision Multi-Tracker Engine & Annotators
         self.tracker_engine = MultiTrackerEngine(initial_mode=settings.DEFAULT_TRACKER_MODE)
@@ -69,6 +63,7 @@ class Detector:
         self.box_annotator = sv.BoundingBoxAnnotator(thickness=2)
         self.label_annotator = sv.LabelAnnotator(text_scale=0.5, text_thickness=1)
         self.trace_annotator = sv.TraceAnnotator(trace_length=30, thickness=2)
+
 
 
         # Dynamic Video Source & Lock
@@ -176,12 +171,77 @@ class Detector:
         """Dynamic runtime method to switch video input sources."""
         return self._init_capture(source_input)
 
+    def _init_model(self, model_path: str) -> tuple[bool, str]:
+        """Loads a YOLO model with dynamic fallback cascade and class mapping resolution."""
+        target_path = str(model_path).strip()
+        selected_path = None
+        
+        if os.path.exists(target_path):
+            selected_path = target_path
+        else:
+            # Fallback cascade
+            fallbacks = [
+                settings.MODEL_PATH,
+                "models/fine_tuned/pediatric-model.pt",
+                "models/fine_tuned/pediatric-smaller-dataset-trained.pt",
+                "models/fine_tuned/pediatric-kids-only.pt",
+                "models/base_model/yolo26s.pt",
+                "models/yolov8n.pt",
+                "yolov8n.pt"
+            ]
+            for fb in fallbacks:
+                if os.path.exists(fb):
+                    selected_path = fb
+                    break
+        
+        if not selected_path:
+            selected_path = "yolov8n.pt"
+
+        try:
+            logger.info(f"Loading YOLO model weights from {selected_path}")
+            model_instance = YOLO(selected_path)
+            
+            with getattr(self, 'model_lock', threading.Lock()):
+                self.model = model_instance
+                self.current_model_path = selected_path
+                self.names = self.model.names
+                
+                # Dynamic class resolution
+                self.child_class_id = settings.CHILD_CLASS_ID
+                self.adult_class_id = settings.ADULT_CLASS_ID
+                
+                for idx, name in self.names.items():
+                    n = str(name).lower()
+                    if 'child' in n or 'kid' in n or 'pediatric' in n:
+                        self.child_class_id = idx
+                    elif 'adult' in n:
+                        self.adult_class_id = idx
+                
+                self.uses_coco_person = len(self.names) == 1 and 'person' in str(self.names.get(0, '')).lower()
+                if 'person' in str(self.names.get(0, '')).lower() and len(self.names) > 10:
+                    self.uses_coco_person = True
+
+                filename = os.path.basename(selected_path)
+                self.current_model_label = filename
+                
+            logger.info(f"Successfully initialized model '{filename}' (Child Class ID: {self.child_class_id}, Adult Class ID: {self.adult_class_id})")
+            return True, f"Loaded model: {filename}"
+        except Exception as e:
+            err_msg = f"Failed to load model from {target_path}: {e}"
+            logger.error(err_msg)
+            return False, err_msg
+
+    def change_model(self, model_path: str) -> tuple[bool, str]:
+        """Dynamic runtime method to switch YOLO model weights."""
+        return self._init_model(model_path)
+
     def change_tracker_mode(self, mode: str) -> tuple[bool, str]:
         """Dynamic runtime method to switch tracking algorithms or auto mode."""
         success, msg = self.tracker_engine.set_mode(mode)
         if success:
             self.current_tracker_status_label = self.tracker_engine.get_info()["status_label"]
         return success, msg
+
 
 
     def _capture_loop(self):
@@ -265,16 +325,19 @@ class Detector:
                 for box, raw_track_id, raw_class_id in zip(boxes, track_ids, class_ids):
                     target_class_id = raw_class_id
 
+                    child_cls = getattr(self, 'child_class_id', settings.CHILD_CLASS_ID)
+                    adult_cls = getattr(self, 'adult_class_id', settings.ADULT_CLASS_ID)
+
                     # For single-class person models (e.g. COCO 0='person'), apply scale height heuristic
                     if self.uses_coco_person and raw_class_id == 0:
                         box_h = float(box[3] - box[1])
                         # If person bounding box is under 40% of frame height, classify as Child (pediatric)
                         if box_h / max(1.0, frame_h) < 0.40:
-                            target_class_id = settings.CHILD_CLASS_ID
+                            target_class_id = child_cls
                         else:
-                            target_class_id = settings.ADULT_CLASS_ID
+                            target_class_id = adult_cls
 
-                    if target_class_id in [settings.ADULT_CLASS_ID, settings.CHILD_CLASS_ID]:
+                    if target_class_id in [child_cls, adult_cls]:
                         resolved_id = self._resolve_track_id(box, raw_track_id, target_class_id, claimed_ids)
                         claimed_ids.add(resolved_id)
                         self.counter.process_detection(resolved_id, target_class_id, box)
@@ -311,7 +374,9 @@ class Detector:
         cv2.line(frame, (x2, y2), (x2, y2 - length), color, thickness)
 
         # 3. Label with modern translucent background
-        class_name = "Adult" if class_id == settings.ADULT_CLASS_ID else "Child"
+        child_cls = getattr(self, 'child_class_id', settings.CHILD_CLASS_ID)
+        class_name = "Child" if class_id == child_cls else "Adult"
+
         if class_index is not None:
             label = f"{class_name} #{class_index} [{track_id}]"
         else:

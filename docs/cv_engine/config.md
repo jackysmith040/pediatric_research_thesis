@@ -9,7 +9,8 @@
 
 | Property | Default Value | Description |
 |---|---|---|
-| `MODEL_PATH` | `"models/expbetter.pt"` | Path to trained YOLO object detection model weights |
+| `MODEL_PATH` | `"models/fine_tuned/pediatric-model.pt"` | Default path to trained fine-tuned YOLO model weights |
+
 | `CONFIDENCE_THRESHOLD` | `0.45` | Minimum confidence score to accept object detections |
 | `IOU_THRESHOLD` | `0.40` | Intersection-over-Union threshold for Non-Maximum Suppression (NMS) |
 | `TRACKER_CONFIG` | `"bytetrack.yaml"` | ByteTrack tracker configuration file |

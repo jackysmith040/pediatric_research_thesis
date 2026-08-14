@@ -3,8 +3,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Model Configuration
-    MODEL_PATH: str = os.getenv("MODEL_PATH", "models/expbetter.pt")
+    MODEL_PATH: str = os.getenv("MODEL_PATH", "models/fine_tuned/pediatric-model.pt")
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.45"))
+
     IOU_THRESHOLD: float = float(os.getenv("IOU_THRESHOLD", "0.4"))
     
     # Tracking Configuration
@@ -50,3 +51,31 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
+
+PRESET_MODELS = [
+    {
+        "name": "Fine-Tuned Pediatric Model (Default)",
+        "path": "models/fine_tuned/pediatric-model.pt",
+        "type": "fine_tuned",
+        "description": "Full fine-tuned YOLO model for pediatric vs adult classification"
+    },
+    {
+        "name": "Kids-Only Pediatric Model",
+        "path": "models/fine_tuned/pediatric-kids-only.pt",
+        "type": "fine_tuned",
+        "description": "Fine-tuned model focused exclusively on pediatric patient detection"
+    },
+    {
+        "name": "Smaller Dataset Trained Model",
+        "path": "models/fine_tuned/pediatric-smaller-dataset-trained.pt",
+        "type": "fine_tuned",
+        "description": "Variant fine-tuned pediatric detection model"
+    },
+    {
+        "name": "Base YOLO26 Small Model",
+        "path": "models/base_model/yolo26s.pt",
+        "type": "base_model",
+        "description": "COCO pretrained YOLO26 Small model with height heuristics"
+    }
+]
+

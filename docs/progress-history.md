@@ -48,11 +48,12 @@ Welcome to the historical log of **The Invisible Child**. This document tracks t
 
 ---
 
-## Phase 7: Multi-Tracker Suite & Automatic Situation Switching
-* **Multi-Tracker Suite (`tracker_engine.py`)**: Implemented dynamic multi-tracker support for `ByteTrack` (fast baseline), `BoT-SORT` (camera motion compensation), `OC-SORT` (non-linear motion), and `FastTracker` (occlusion aware).
-* **Automatic Scene Analyzer**: Real-time estimation of camera motion (downsampled optical flow/frame difference) and crowd occlusion density (pairwise IoU overlap).
-* **Hysteresis Stabilization**: 3.0-second stabilization timer prevents rapid flicker between tracker algorithms under borderline conditions.
-* **Interactive UI Controls**: Embedded active tracker indicator badges (`Tracker: ByteTrack [Auto]`) and manual tracker selector dropdown menus in `/dashboard` and `/video-test`.
-* **Full Unit Test Verification**: Expanded Pytest suite to 26/26 passing unit tests covering `SceneAnalyzer`, `MultiTrackerEngine`, and `Detector.change_tracker_mode()`.
+## Phase 8: Model Suite & Dynamic Model Switching
+* **Fine-Tuned & Base Model Integration**: Organized and integrated models into `models/fine_tuned/` (`pediatric-model.pt`, `pediatric-kids-only.pt`, `pediatric-smaller-dataset-trained.pt`) and `models/base_model/` (`yolo26s.pt`).
+* **Dynamic Class Resolution**: Automatically resolves child/adult class indices (`child_class_id` and `adult_class_id`) dynamically from YOLO model class names.
+* **Runtime Model Switching**: Added thread-safe `Detector.change_model(model_path)` enabling live runtime model switching without restarting the video stream.
+* **Interactive UI Selectors**: Integrated AI model selector dropdown menus in both `/dashboard` and `/video-test`.
+* **27/27 Unit Tests Passing**: Expanded test suite to cover dynamic model loading and class resolution.
+
 
 

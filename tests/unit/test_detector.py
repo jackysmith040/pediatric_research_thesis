@@ -121,6 +121,20 @@ def test_change_tracker_mode(mock_detector):
     assert "BoT-SORT" in mock_detector.current_tracker_status_label
     assert "[Manual]" in mock_detector.current_tracker_status_label
 
+def test_change_model_success(mock_detector, monkeypatch):
+    import threading
+    mock_detector.model_lock = threading.Lock()
+    mock_model = MagicMock()
+    mock_model.names = {0: 'child', 1: 'adult'}
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: mock_model)
+    
+    success, msg = mock_detector.change_model("models/fine_tuned/pediatric-model.pt")
+    assert success is True
+    assert mock_detector.child_class_id == 0
+    assert mock_detector.adult_class_id == 1
+    assert "pediatric-model.pt" in msg
+
+
 
 
 
