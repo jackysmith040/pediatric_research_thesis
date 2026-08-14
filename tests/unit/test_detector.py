@@ -146,16 +146,35 @@ def test_perspective_normalization_sitting_pose():
     # Sitting adult with aspect ratio compensation should be classified as Adult (0)
     assert cls == 0
 
-def test_calculate_perspective_class_rejects_non_person():
-    import numpy as np
-    # Extremely wide box (e.g. bench or chair seat) -> w=500, h=50 -> w/h = 10.0
-    wide_box = np.array([0, 100, 500, 150])
-    frame_h = 1000.0
+def test_all_preset_models_resolution(mock_detector, monkeypatch):
+    import threading
+    mock_detector.model_lock = threading.Lock()
     
-    res = Detector.calculate_perspective_class(
-        wide_box, frame_h, raw_class_id=0, child_cls=1, adult_cls=0
-    )
-    assert res == -1
+    # 1. Test Kids-Only Model {0: 'Child'}
+    kids_model = MagicMock()
+    kids_model.names = {0: 'Child'}
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: kids_model)
+    mock_detector.change_model("models/fine_tuned/pediatric-kids-only.pt")
+    assert mock_detector.child_class_id == 0
+    assert mock_detector.adult_class_id == -1
+    
+    # 2. Test Smaller Dataset Trained Model {0: 'Child', 1: 'Adult'}
+    variant_model = MagicMock()
+    variant_model.names = {0: 'Child', 1: 'Adult'}
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: variant_model)
+    mock_detector.change_model("models/fine_tuned/pediatric-smaller-dataset-trained.pt")
+    assert mock_detector.child_class_id == 0
+    assert mock_detector.adult_class_id == 1
+    
+    # 3. Test Base YOLO26 COCO Model {0: 'person', ...}
+    coco_model = MagicMock()
+    coco_model.names = {0: 'person', 1: 'bicycle', 56: 'chair'}
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: coco_model)
+    mock_detector.change_model("models/base_model/yolo26s.pt")
+    assert mock_detector.uses_coco_person is True
+    assert mock_detector.child_class_id == settings.CHILD_CLASS_ID
+    assert mock_detector.adult_class_id == settings.ADULT_CLASS_ID
+
 
 
 

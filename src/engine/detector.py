@@ -207,24 +207,38 @@ class Detector:
                 self.current_model_path = selected_path
                 self.names = self.model.names
                 
-                # Dynamic class resolution
-                self.child_class_id = settings.CHILD_CLASS_ID
-                self.adult_class_id = settings.ADULT_CLASS_ID
+                # Dynamic class resolution for fine-tuned and base models
+                found_child = None
+                found_adult = None
                 
                 for idx, name in self.names.items():
                     n = str(name).lower()
                     if 'child' in n or 'kid' in n or 'pediatric' in n:
-                        self.child_class_id = idx
+                        found_child = idx
                     elif 'adult' in n:
-                        self.adult_class_id = idx
+                        found_adult = idx
                 
-                self.uses_coco_person = len(self.names) == 1 and 'person' in str(self.names.get(0, '')).lower()
-                if 'person' in str(self.names.get(0, '')).lower() and len(self.names) > 10:
-                    self.uses_coco_person = True
+                if found_child is not None and found_adult is not None:
+                    self.child_class_id = found_child
+                    self.adult_class_id = found_adult
+                elif found_child is not None:
+                    self.child_class_id = found_child
+                    self.adult_class_id = -1  # Dedicated Kids-Only Model
+                elif found_adult is not None:
+                    self.adult_class_id = found_adult
+                    self.child_class_id = -1  # Dedicated Adult-Only Model
+                else:
+                    self.adult_class_id = settings.ADULT_CLASS_ID
+                    self.child_class_id = settings.CHILD_CLASS_ID
+                
+                names_str = ' '.join(str(v).lower() for v in self.names.values())
+                self.uses_coco_person = 'person' in str(self.names.get(0, '')).lower() and 'child' not in names_str and 'adult' not in names_str
 
                 if hasattr(self, 'counter') and self.counter is not None:
                     self.counter.child_class_id = self.child_class_id
                     self.counter.adult_class_id = self.adult_class_id
+
+
 
                 filename = os.path.basename(selected_path)
                 self.current_model_label = filename
