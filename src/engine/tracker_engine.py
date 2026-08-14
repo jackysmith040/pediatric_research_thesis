@@ -1,10 +1,12 @@
 import time
 import logging
+import warnings
 import cv2
 import numpy as np
 import supervision as sv
 from typing import Tuple, Dict, Optional, Any
 from src.engine.config import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -138,12 +140,15 @@ class MultiTrackerEngine:
         self.last_occlusion_score: float = 0.0
 
     def _create_tracker_instance(self, track_thresh: float, match_thresh: float, lost_buffer: int = 30) -> sv.ByteTrack:
-        return sv.ByteTrack(
-            track_activation_threshold=float(track_thresh),
-            minimum_matching_threshold=float(match_thresh),
-            lost_track_buffer=int(lost_buffer),
-            frame_rate=settings.BYTETRACK_FRAME_RATE
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            return sv.ByteTrack(
+                track_activation_threshold=float(track_thresh),
+                minimum_matching_threshold=float(match_thresh),
+                lost_track_buffer=int(lost_buffer),
+                frame_rate=settings.BYTETRACK_FRAME_RATE
+            )
+
 
 
     def set_mode(self, new_mode: str) -> Tuple[bool, str]:

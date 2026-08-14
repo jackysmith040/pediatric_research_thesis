@@ -1,8 +1,12 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     # Model Configuration
+
     MODEL_PATH: str = os.getenv("MODEL_PATH", "models/fine_tuned/pediatric-model.pt")
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.45"))
 
@@ -55,10 +59,8 @@ class Settings(BaseSettings):
     ADULT_CLASS_ID: int = int(os.getenv("ADULT_CLASS_ID", "0"))
     CHILD_CLASS_ID: int = int(os.getenv("CHILD_CLASS_ID", "1"))
 
-    class Config:
-        env_file = ".env"
-
 settings = Settings()
+
 
 PRESET_MODELS = [
     {

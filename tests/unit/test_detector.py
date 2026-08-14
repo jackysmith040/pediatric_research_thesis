@@ -103,12 +103,16 @@ def test_apply_clahe_preprocessing():
 
 def test_supervision_bytetrack_initialization(mock_detector):
     import supervision as sv
-    tracker = sv.ByteTrack(
-        track_activation_threshold=settings.BYTETRACK_TRACK_THRESH,
-        minimum_matching_threshold=settings.BYTETRACK_MATCH_THRESH,
-        frame_rate=settings.BYTETRACK_FRAME_RATE
-    )
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=FutureWarning)
+        tracker = sv.ByteTrack(
+            track_activation_threshold=settings.BYTETRACK_TRACK_THRESH,
+            minimum_matching_threshold=settings.BYTETRACK_MATCH_THRESH,
+            frame_rate=settings.BYTETRACK_FRAME_RATE
+        )
     assert tracker is not None
+
 
 def test_change_tracker_mode(mock_detector):
     from src.engine.tracker_engine import MultiTrackerEngine
