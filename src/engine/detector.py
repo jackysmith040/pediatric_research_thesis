@@ -60,9 +60,10 @@ class Detector:
         self.tracker_engine = MultiTrackerEngine(initial_mode=settings.DEFAULT_TRACKER_MODE)
         self.current_tracker_status_label = "ByteTrack [Auto]"
         
-        self.box_annotator = sv.BoundingBoxAnnotator(thickness=2)
+        self.box_annotator = sv.BoxAnnotator(thickness=2)
         self.label_annotator = sv.LabelAnnotator(text_scale=0.5, text_thickness=1)
         self.trace_annotator = sv.TraceAnnotator(trace_length=30, thickness=2)
+
 
 
 
