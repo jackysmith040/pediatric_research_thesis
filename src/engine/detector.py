@@ -185,6 +185,8 @@ class Detector:
             # Fallback cascade: prioritize ONNX high-speed models, then PyTorch, then base
             fallbacks = [
                 settings.MODEL_PATH,
+                "models/onnx_versions_fine_tuned/yolo26s_distilled.onnx",
+                "models/fine_tuned/yolo26s_distilled.pt",
                 "models/onnx_versions_fine_tuned/pediatric-model.onnx",
                 "models/onnx_versions_fine_tuned/pediatric-smaller-dataset-trained.onnx",
                 "models/onnx_versions_fine_tuned/pediatric-kids-only.onnx",

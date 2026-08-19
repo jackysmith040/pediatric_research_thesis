@@ -100,6 +100,18 @@ PRESET_MODELS = [
         "description": "Variant fine-tuned PyTorch pediatric detection model"
     },
     {
+        "name": "DINOv3 Distilled Pediatric Model (ONNX - SOTA Edge)",
+        "path": "models/onnx_versions_fine_tuned/yolo26s_distilled.onnx",
+        "type": "onnx_distilled",
+        "description": "DINOv3 ViT representation-distilled YOLO26s model optimized for severe occlusion via ONNX runtime"
+    },
+    {
+        "name": "DINOv3 Distilled Pediatric Model (PyTorch - SOTA)",
+        "path": "models/fine_tuned/yolo26s_distilled.pt",
+        "type": "distilled",
+        "description": "DINOv3 ViT representation-distilled YOLO26s model with dense semantic feature transfer"
+    },
+    {
         "name": "Base YOLO26 Small Model",
         "path": "models/base_model/yolo26s.pt",
         "type": "base_model",

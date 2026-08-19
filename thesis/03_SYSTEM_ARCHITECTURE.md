@@ -45,11 +45,12 @@ To eliminate all network serialization overhead and simplify clinical deployment
   │  ┌─────────────────────────┐             ┌───────────────────────────┐  │
   │  │ NiceGUI Web UI Layer    │             │ Computer Vision Engine    │  │
   │  │ - Landing Page (/)      │             │ - LAB CLAHE Preprocessor  │  │
-  │  │ - Dashboard (/dashboard)│             │ - YOLO (PyTorch / ONNX)   │  │
-  │  │ - Eval Lab (/video-test)│ ◄─────────► │ - MultiTracker Suite      │  │
-  │  │ - Stream Endpoint       │  In-Memory  │ - Scene Motion Analyzer   │  │
-  │  │   (/camera/stream)      │  Direct     │ - Spatial Centroid Memory │  │
-  │  │ - PDF / CSV Exporter    │  Binding    │ - Debouncing Lost Queue   │  │
+  │  │ - Dashboard (/dashboard)│             │ - Distilled YOLO26s (ONNX)│  │
+  │  │ - Eval Lab (/video-test)│ ◄─────────► │ - SAHI Multi-Patch Slicer │  │
+  │  │ - Stream Endpoint       │  In-Memory  │ - MultiTracker Suite      │  │
+  │  │   (/camera/stream)      │  Direct     │ - Scene Motion Analyzer   │  │
+  │  │ - PDF / CSV Exporter    │  Binding    │ - Spatial Centroid Memory │  │
+  │  │ - LaTeX Table Generator │             │ - Debouncing Lost Queue   │  │
   │  └─────────────────────────┘             └───────────────────────────┘  │
   │                 │                                      │                │
   └─────────────────┼──────────────────────────────────────┼────────────────┘
@@ -65,7 +66,57 @@ In this architecture:
 
 ---
 
-## 3.2 Decoupled Dual-Thread Capture-Inference Pattern
+## 3.2 Two-Stage Machine Learning Pipeline (Offline Distillation $\to$ Online Edge Inference)
+
+The system establishes a clean architectural separation between heavy offline knowledge distillation pre-training and lightweight online edge execution:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│             STAGE 1: OFFLINE KNOWLEDGE DISTILLATION & OPTIMIZATION       │
+│                                                                          │
+│  Unlabeled Clinical CCTV Feed + Labeled Pediatric Dataset (2,414 NDJSON) │
+│                                │                                         │
+│                                ▼                                         │
+│  Dense Feature Distillation: DINOv3 ViT Teacher ──► YOLO26s Student Neck │
+│  (Self-Supervised Cosine Similarity + Normalized MSE Loss)               │
+│                                │                                         │
+│                                ▼                                         │
+│  Supervised Fine-Tuning on Pediatric Dataset (CIoU + DFL + BCE Loss)     │
+│                                │                                         │
+│                                ▼                                         │
+│  Static ONNX Graph Export & CPU Quantization (yolo26s_distilled.onnx)    │
+└────────────────────────────────┬─────────────────────────────────────────┘
+                                 │ Optimized Model Binary (11.2M Params)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│             STAGE 2: ONLINE REAL-TIME EDGE INFERENCE & TRACKING          │
+│                                                                          │
+│  Hospital CCTV Video Feed (UVC / RTSP / MP4)                             │
+│                                │                                         │
+│                                ▼                                         │
+│  Decoupled Capture Worker Thread (CAP_PROP_BUFFERSIZE = 1)               │
+│                                │                                         │
+│                                ▼                                         │
+│  LAB Color Space CLAHE Preprocessing (L* Luminance Contrast Boost)       │
+│                                │                                         │
+│                                ▼                                         │
+│  SAHI Multi-Scale Patch Slicing (640x640 Tiles, 20% Overlap)             │
+│                                │                                         │
+│                                ▼                                         │
+│  High-Throughput ONNX Runtime CPU Inference (28.4 ms Execution)          │
+│                                │                                         │
+│                                ▼                                         │
+│  Adaptive Multi-Tracker Suite (ByteTrack / BoT-SORT / FastTracker)       │
+│  + Spatial Centroid Fallback (r <= 40 px) & Temporal Debouncing (5.0 s)  │
+│                                │                                         │
+│                                ▼                                         │
+│  In-Memory Telemetry Binding ──► NiceGUI Clinical Dashboard & Alerts     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3.3 Decoupled Dual-Thread Capture-Inference Pattern
 
 A notorious vulnerability of OpenCV's `cv2.VideoCapture` interface is internal frame buffer latency. By default, OpenCV maintains a multi-frame circular hardware buffer. If frame capture and neural inference execute synchronously within a single loop:
 
@@ -73,7 +124,7 @@ $$\text{Loop Time} = t_{\text{capture}} + t_{\text{CLAHE}} + t_{\text{YOLO}} + t
 
 Because deep learning inference takes longer than camera frame acquisition ($33.3\text{ ms}$ at 30 FPS), the OpenCV hardware buffer quickly fills with stale frames. Consequently, the displayed video feed accumulates a severe **3 to 5 second visual lag**, completely destroying real-time clinical responsiveness.
 
-### 3.2.1 Asynchronous Thread Architecture
+### 3.3.1 Asynchronous Thread Architecture
 To solve this, the CV Engine implements a decoupled **asynchronous dual-thread execution model**:
 
 ```
@@ -93,7 +144,7 @@ To solve this, the CV Engine implements a decoupled **asynchronous dual-thread e
                       ┌──────────────────────────┐
                       │  Thread 2: YOLO Loop     │
                       │  - LAB CLAHE Preproc     │
-                      │  - YOLO Neural Inference │
+                      │  - SAHI Multi-Patch / ONNX│
                       │  - MultiTracker Update   │
                       │  - Spatial Fallback Res  │
                       └────────────┬─────────────┘
@@ -118,7 +169,7 @@ To solve this, the CV Engine implements a decoupled **asynchronous dual-thread e
 #### Thread 2: Neural Inference Worker (`Detector._yolo_loop`)
 - Fetches the freshest available frame snapshot from `self.latest_frame`.
 - Executes CLAHE contrast enhancement in the LAB color space.
-- Invokes deep neural inference (PyTorch or ONNX Runtime).
+- Invokes deep neural inference via ONNX Runtime with SAHI patch slicing.
 - Updates the active multi-tracker instance and executes scene analysis.
 - Resolves untracked detections via spatial centroid fallback matching.
 - Updates the centralized `TelemetryState` model and passes new bounding box overlays to `self.latest_boxes` behind a lightweight mutex lock (`self.box_lock`).
@@ -127,7 +178,7 @@ By fully decoupling frame acquisition from neural processing, the video feed nev
 
 ---
 
-## 3.3 Zero-Network-Serialization In-Memory State Model
+## 3.4 Zero-Network-Serialization In-Memory State Model
 
 System state is managed by a centralized, thread-safe Pydantic data model defined in `src/state/telemetry.py`:
 
@@ -155,7 +206,7 @@ Whenever the `Counter` updates `state.current_children`, NiceGUI automatically u
 
 ---
 
-## 3.4 Hardware Abstraction & Dynamic Stream Resolution
+## 3.5 Hardware Abstraction & Dynamic Stream Resolution
 
 Clinical surveillance infrastructure is inherently heterogeneous: facilities may deploy USB webcams (UVC), high-resolution RTSP IP security cameras, standard HTTP video streams, or local recorded validation footage.
 
@@ -163,20 +214,20 @@ The system incorporates a dynamic stream resolution layer (`StreamResolver`, def
 
 ```
                        User / UI Stream Input
-                                 │
-           ┌─────────────────────┼─────────────────────┐
-           ▼                     ▼                     ▼
-     Numeric Digit         YouTube URL           RTSP / HTTP / File
-     (e.g., "0", "1")  (e.g., "youtu.be/...")    (e.g., "rtsp://...", ".mp4")
-           │                     │                     │
-           ▼                     ▼                     ▼
-     Direct OpenCV         cap_from_youtube      Standard OpenCV
-     Device Index          Resolution            Video Pipeline
-           │                     │                     │
-           └─────────────────────┼─────────────────────┘
-                                 ▼
-                     Opened cv2.VideoCapture Handle
-                     + Thread-Safe Lock Acquisition
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+      Numeric Digit         YouTube URL           RTSP / HTTP / File
+      (e.g., "0", "1")  (e.g., "youtu.be/...")    (e.g., "rtsp://...", ".mp4")
+            │                     │                     │
+            ▼                     ▼                     ▼
+      Direct OpenCV         cap_from_youtube      Standard OpenCV
+      Device Index          Resolution            Video Pipeline
+            │                     │                     │
+            └─────────────────────┼─────────────────────┘
+                                  ▼
+                      Opened cv2.VideoCapture Handle
+                      + Thread-Safe Lock Acquisition
 ```
 
 ### Supported Stream Types:
@@ -195,7 +246,7 @@ The application supports seamless runtime switching between video feeds without 
 
 ---
 
-## 3.5 Operational Modes: Web Browser vs. Native Desktop App
+## 3.6 Operational Modes: Web Browser vs. Native Desktop App
 
 The application provides dual runtime operational modes:
 

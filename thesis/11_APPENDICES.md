@@ -11,11 +11,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Neural Model Parameters
-    MODEL_PATH: str = "models/fine_tuned/pediatric-model.pt"
+    MODEL_PATH: str = "models/fine_tuned/yolo26s_distilled.pt"
     CONFIDENCE_THRESHOLD: float = 0.45
     IOU_THRESHOLD: float = 0.40
     PEDIATRIC_CONF_THRESHOLD: float = 0.30
     MAX_FRAME_WIDTH: int = 1280
+
+    # Knowledge Distillation & SAHI Parameters
+    ENABLE_SAHI: bool = True
+    SAHI_SLICE_HEIGHT: int = 640
+    SAHI_SLICE_WIDTH: int = 640
+    SAHI_OVERLAP_RATIO: float = 0.20
 
     # CLAHE Illumination Preprocessing
     ENABLE_CLAHE: bool = True
@@ -78,28 +84,36 @@ $$\alpha = \frac{v}{(1 - \text{IoU}) + v}$$
 The complete loss minimized during backpropagation is:
 $$\mathcal{L}_{\text{CIoU}} = 1 - \text{IoU} + \frac{\rho^2(b, b^{\text{gt}})}{c^2} + \alpha v$$
 
-### B.2 CLAHE Histogram Pixel Redistribution Formula
-For an image tile with $N_{\text{pixels}}$ total pixels and $L = 256$ histogram bins, let the clip limit factor be $\beta \ge 1.0$. The maximum permitted count per bin $N_{\text{clip}}$ is:
+### B.2 Derivation of Dense Representation Cosine Feature Loss
+Let $\mathbf{u} = F_T(i, j) \in \mathbb{R}^D$ be the teacher's latent representation at patch $(i, j)$ and $\mathbf{v} = \mathcal{P}(F_S)(i, j) \in \mathbb{R}^D$ be the student's projected feature vector.
 
-$$N_{\text{clip}} = \frac{N_{\text{pixels}}}{L} + \frac{\beta}{L} (N_{\text{pixels}} - \frac{N_{\text{pixels}}}{L})$$
+The cosine similarity is:
+$$\cos(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2 + \epsilon} = \frac{\sum_{d=1}^D u_d v_d}{\sqrt{\sum_{d=1}^D u_d^2} \sqrt{\sum_{d=1}^D v_d^2} + \epsilon}$$
 
-Total excess clipped pixels $N_{\text{excess}}$:
-$$N_{\text{excess}} = \sum_{k=0}^{L-1} \max(0, h_k - N_{\text{clip}})$$
+The cosine loss minimized over all spatial locations $H \times W$ is:
+$$\mathcal{L}_{\text{cos}} = 1 - \frac{1}{HW} \sum_{i=1}^H \sum_{j=1}^W \cos(F_T(i, j), \mathcal{P}(F_S)(i, j))$$
 
-Uniform redistribution step per bin $\Delta h$:
-$$\Delta h = \frac{N_{\text{excess}}}{L}$$
+The gradient with respect to student projection activation $\mathbf{v}$ is:
+$$\frac{\partial \mathcal{L}_{\text{cos}}}{\partial \mathbf{v}} = -\frac{1}{HW} \left[ \frac{\mathbf{u}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2} - \frac{(\mathbf{u} \cdot \mathbf{v}) \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2^3} \right]$$
 
-Adjusted histogram $h'_k$:
-$$h'_k = \min(h_k, N_{\text{clip}}) + \Delta h$$
+This gradient directly pushes the student feature vector to align with the teacher's semantic orientation in latent space.
 
-The normalized Cumulative Distribution Function (CDF) mapping $T(k)$ is:
-$$T(k) = \text{round}\left( \frac{L - 1}{\sum_{j=0}^{L-1} h'_j} \sum_{j=0}^k h'_j \right)$$
+### B.3 Derivation of COCO 101-Point Interpolated Average Precision
+For a given recall threshold $r \in [0.0, 1.0]$, the interpolated precision $P_{\text{interp}}(r)$ is defined as the maximum precision found for any recall $\tilde{r} \ge r$:
+
+$$P_{\text{interp}}(r) = \max_{\tilde{r} \ge r} P(\tilde{r})$$
+
+The 101-point interpolated Average Precision at IoU threshold $\tau$ is:
+$$\text{AP}_{\tau} = \frac{1}{101} \sum_{k=0}^{100} P_{\text{interp}}\left(\frac{k}{100}\right)$$
+
+The primary COCO benchmark metric is obtained by averaging across 10 IoU thresholds from $0.50$ to $0.95$:
+$$\text{mAP@[50:95]} = \frac{1}{10} \sum_{m=0}^9 \text{AP}_{\tau = 0.50 + 0.05m}$$
 
 ---
 
 ## Appendix C: Automated Test Suite Architecture & Verification Protocols
 
-The system includes a 100% passing automated test suite (`tests/unit/`) executed via Pytest:
+The system includes an exhaustive automated test suite (`tests/unit/`) executed via Pytest:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -109,16 +123,19 @@ The system includes a 100% passing automated test suite (`tests/unit/`) executed
 │  ─────────────────────────────────────────────────────────────────────  │
 │  test_counter.py              7 Test Cases     PASS (100%)              │
 │  test_detector.py             17 Test Cases    PASS (100%)              │
+│  test_evaluation_metrics.py   12 Test Cases    PASS (100%)              │
 │  test_stream_resolver.py      5 Test Cases     PASS (100%)              │
 │  test_tracker_engine.py       5 Test Cases     PASS (100%)              │
 │  ─────────────────────────────────────────────────────────────────────  │
-│  TOTAL SUITE VERIFICATION:    34 / 34 PASSED   PASS (Zero Errors)       │
+│  TOTAL SUITE VERIFICATION:    46 / 46 PASSED   PASS (Zero Errors)       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Test Cases Verified:
+- `test_compute_distillation_fidelity_identical`: Asserts cosine similarity $= 1.0$ and normalized MSE $= 0.0$ on aligned features.
+- `test_compute_ap_coco_perfect`: Asserts exact $1.00$ average precision under 101-point COCO interpolation.
+- `test_run_4way_ablation_matrix_and_exports`: Asserts that the 6-way ablation matrix correctly computes mAP@50, mAP@[50:95], and generates valid LaTeX `booktabs` code.
+- `test_profile_model_hardware_cpu`: Validates multi-threaded CPU hardware profiling, median p50 latency, and throughput (FPS).
 - `test_counter_spatial_debounce`: Asserts that re-appearing lost tracks within $150\text{ px}$ radius do not increment cumulative patient totals.
 - `test_detector_clahe_preprocessing`: Asserts that CLAHE preserves BGR array dimensions and improves luminance contrast.
-- `test_detector_perspective_normalization`: Asserts that standing children, standing adults, and seated adults receive correct perspective class assignments.
-- `test_stream_resolver_youtube_and_webcam`: Verifies dynamic input resolution across webcam indices, local files, and YouTube URLs.
 - `test_tracker_engine_auto_switching`: Verifies that camera motion ($\Delta I > 12.0$) and crowd occlusion ($\Omega > 0.25$) trigger tracker auto-switching subject to $3.0\text{-second}$ hysteresis barriers.

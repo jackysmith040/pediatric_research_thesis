@@ -54,6 +54,7 @@ Single-stage detectors, pioneered by the **You Only Look Once (YOLO)** framework
 The YOLO architecture has undergone profound evolutionary milestones:
 - **YOLOv3 & YOLOv4 (Redmon & Farhadi, 2018; Bochkovskiy et al., 2020):** Introduced multi-scale Feature Pyramid Networks (FPN), Path Aggregation Networks (PANet), and Cross-Stage Partial Connections (CSPNet), significantly enhancing multi-scale feature representation.
 - **YOLOv8 & YOLOv11 (Ultralytics, 2023; 2024):** Adopted an **anchor-free** detection head, eliminating predefined anchor box heuristics and directly predicting offsets from bounding box centers. This eliminated manual anchor hyperparameter tuning and dramatically improved localization accuracy for irregular object aspect ratios.
+- **YOLO26s Architecture:** Incorporates optimized C2f building blocks and decoupled regression-classification heads with dynamic channel scaling, minimizing parameter redundancy while maintaining high representational capacity.
 - **Loss Formulations in Modern YOLO:** Modern single-stage networks employ composite multi-task loss functions combining Distribution Focal Loss (DFL) and Complete Intersection-over-Union (CIoU) loss for spatial regression:
 
 $$\mathcal{L}_{\text{total}} = \lambda_{\text{box}} \mathcal{L}_{\text{CIoU}} + \lambda_{\text{dfl}} \mathcal{L}_{\text{DFL}} + \lambda_{\text{cls}} \mathcal{L}_{\text{BCE}}$$
@@ -65,11 +66,89 @@ Here, $\rho(b, b^{\text{gt}})$ represents the Euclidean distance between predict
 
 ---
 
-## 2.3 Multi-Object Tracking (MOT) Paradigms & Mathematical Foundations
+## 2.3 Knowledge Distillation & Foundation Models in Computer Vision
+
+While lightweight single-stage convolutional networks (such as YOLO26s) satisfy edge inference constraints, their limited parameter capacity ($11.2\text{ M}$ parameters) causes severe feature collapse when encountering heavily occluded, non-rigid, or swaddled infants. Conversely, massive **Vision Foundation Models** (such as DINOv2 and DINOv3 Vision Transformers) possess extraordinary zero-shot semantic representation capabilities, but require hundreds of millions of parameters, preventing real-time CPU deployment. **Knowledge Distillation (KD)** bridges this fundamental divide.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│            DENSE FOUNDATION KNOWLEDGE DISTILLATION (DINOv3 -> YOLO26s)   │
+│                                                                          │
+│   Teacher: DINOv3 ViT Foundation Model (85M+ Params, Patch Tokens)       │
+│   Dense Semantic Features F_T (Dim = 768)                                │
+│                     │                                                    │
+│                     ├──► Cosine Similarity Loss L_cos ◄──┐               │
+│                     │                                    │               │
+│                     └──► Mean Squared Error Loss L_mse ◄─┼───────────────┤
+│                                                          │               │
+│   Projected Student Features P(F_S) (1x1 Conv: 512 -> 768)               │
+│   Student: YOLO26s Convolutional Neck (11.2M Params, Real-Time CPU)      │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.3.1 Logit-Based vs. Dense Feature-Based Distillation
+Knowledge distillation, originated by Hinton et al. (2015), initially operated on output logit probability distributions using temperature-scaled softmax cross-entropy:
+
+$$\mathcal{L}_{\text{logit}} = \tau^2 \cdot \text{KL}\left( \sigma\left(\frac{\mathbf{z}_S}{\tau}\right) \, \Big|\Big| \, \sigma\left(\frac{\mathbf{z}_T}{\tau}\right) \right)$$
+
+While logit distillation transfers inter-class dark knowledge in classification tasks, it provides insufficient spatial guidance for dense object detection.
+
+To guide bounding box localization and fine-grained visual discovery under severe occlusion, **Feature-Based Knowledge Distillation** (Romero et al., 2014, *FitNets*; Zagoruyko & Komodakis, 2017; Tian et al., 2020) aligns intermediate latent activation tensors between the teacher network $\mathcal{M}_T$ and student network $\mathcal{M}_S$.
+
+### 2.3.2 Self-Supervised Vision Transformers: The DINO Architecture Family
+The **DINO (Self-distillation with no labels)** family—spanning DINO (Caron et al., 2021), DINOv2 (Oquab et al., 2023), and DINOv3 (Meta AI, 2024)—trains Vision Transformers (ViTs) on billions of unlabeled images using a self-supervised student-teacher momentum framework without human class labels.
+
+DINO models partition an input image $I \in \mathbb{R}^{H \times W \times 3}$ into a grid of non-overlapping patches $p \in \mathbb{R}^{N \times (P^2 \cdot C)}$ (where $P=14$ or $16$), processing them through multi-head self-attention layers:
+
+$$\text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_k}}\right)\mathbf{V}$$
+
+A remarkable emergent property of DINO representations is that their intermediate patch tokens encode **explicit semantic segmentations and part-level boundaries** without ever being trained on segmentation masks. A DINOv3 Vision Transformer easily distinguishes the structural boundary of an infant head against a caregiver's clothing because its multi-head attention heads capture global relational context across the entire image.
+
+### 2.3.3 Distilling Foundation Priors into Edge Convolutional Detectors
+By distilling DINOv3 latent token representations into intermediate YOLO26s feature pyramid layers during a self-supervised pre-training phase, the lightweight convolutional student inherits the foundation model's invariant semantic priors. When the student is subsequently fine-tuned on clinical triage data, it retains high sensitivity to obscured infant contours, directly neutralizing the Invisible Child phenomenon while maintaining $30\text{ FPS}$ edge CPU execution speeds.
+
+---
+
+## 2.4 Small Object Detection & Slicing Aided Hyper Inference (SAHI)
+
+In clinical triage surveillance, high-mounted wide-angle cameras capture entire waiting rooms ($1920\times 1080$ resolution). However, an infant carried by a caregiver in the background of such a scene may occupy a minuscule pixel bounding box of only $24\times 24$ pixels ($<0.03\%$ of total image area).
+
+Standard convolutional detectors downsample input images to fixed sizes (e.g., $640\times 640$). Under $32\times$ downsampling in deep backbone layers (P5 feature maps), a $24\times 24$ infant bounding box is reduced to less than a single spatial pixel ($0.75\times 0.75$), causing catastrophic feature vanishing.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                   SLICING AIDED HYPER INFERENCE (SAHI)                   │
+│                                                                          │
+│   Full 1080p Image (1920x1080)                                           │
+│   ┌──────────────────────────────────────────────┐                       │
+│   │  [Slice 1]    [Slice 2]    [Slice 3]         │ Overlapping Patches   │
+│   │  ┌──────┐     ┌──────┐     ┌──────┐          │ (e.g. 640x640, 20% ov)│
+│   │  │ Infant│◄───┼──────┼─────┼──────┤          │                       │
+│   │  └──────┘     └──────┘     └──────┘          │                       │
+│   │  [Slice 4]    [Slice 5]    [Slice 6]         │                       │
+│   └──────────────────────────────────────────────┘                       │
+│                         │                                                │
+│                         ▼ Parallel Patch Inference                       │
+│   Batch Detections across all Slices + Full Frame                        │
+│                         │                                                │
+│                         ▼ Non-Maximum Suppression (NMS) Coordinate Shift │
+│   Final Merged High-Resolution Global Detections                         │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Slicing Aided Hyper Inference (SAHI)** (Akyon et al., 2022) overcomes this scale vanishing limitation:
+1. **Dynamic Patch Partitioning:** The high-resolution frame is sliced into overlapping patches $P_k$ of dimension $M \times N$ with overlap ratio $r_{\text{overlap}} \in [0.15, 0.25]$.
+2. **Local Fine-Grained Inference:** Each slice is fed to the object detector at full native resolution, magnifying small-scale carried infants by $3\times \text{ to } 5\times$ in pixel density.
+3. **Coordinate Transformation & Global Merging:** Predicted slice coordinates $(x_s, y_s)$ are mapped back to full-frame global coordinates $(x_g, y_g) = (x_s + x_{\text{offset}}, y_s + y_{\text{offset}})$.
+4. **NMS Post-Processing:** Standard Non-Maximum Suppression merges duplicate detections across overlapping tile boundaries.
+
+---
+
+## 2.5 Multi-Object Tracking (MOT) Paradigms & Mathematical Foundations
 
 While object detection identifies target coordinates within individual frames, **Multi-Object Tracking (MOT)** establishes temporal correspondence across successive video frames, assigning a unique persistent tracking identifier $\text{ID}_k$ to each distinct patient trajectory $\mathcal{T}_k = \{ \mathbf{z}_t \}_{t=1}^T$.
 
-### 2.3.1 Classical Kalman Filtering & Hungarian Association (SORT)
+### 2.5.1 Classical Kalman Filtering & Hungarian Association (SORT)
 The Simple Online and Realtime Tracking (**SORT**) algorithm (Bewley et al., 2016) established the benchmark for high-speed tracking-by-detection. SORT models target motion in image space using a linear constant-velocity Kalman filter (Kalman, 1960).
 
 The target state vector $\mathbf{x}_t$ is defined as:
@@ -116,21 +195,21 @@ Matched Pairs (Update Kalman)     Unmatched (Spawn / Terminate)
 **Limitations of SORT in Clinical Waiting Halls:**  
 SORT relies solely on spatial overlap and velocity continuity. When patients sit motionless, pass behind other individuals, or are carried in occluded blankets, detection boxes drop below detection thresholds or spatial IoU becomes zero. Consequently, SORT loses track continuity and instantiates a new ID when the target reappears, causing severe cumulative double-counting in daily hospital logs.
 
-### 2.3.2 DeepSORT: Visual Embeddings & Edge Bottlenecks
+### 2.5.2 DeepSORT: Visual Embeddings & Edge Bottlenecks
 To overcome the spatial limitations of SORT during occlusion, **DeepSORT** (Wojke et al., 2017) integrated visual appearance embeddings extracted via a deep convolutional Re-Identification (Re-ID) network. The association cost metric combines Mahalanobis spatial distance $d^{(1)}(i, j)$ and cosine visual appearance distance $d^{(2)}(i, j)$:
 
 $$c_{i, j} = \lambda d^{(1)}(i, j) + (1 - \lambda) d^{(2)}(i, j)$$
 
 While DeepSORT successfully recovers trajectories across short occlusions, running a separate deep convolutional feature extraction pass for every cropped bounding box in every frame imposes enormous computational overhead ($>300\%$ increase in CPU execution time), violating the low-latency constraints of resource-constrained edge hardware.
 
-### 2.3.3 ByteTrack: Association with Low-Score Detections
+### 2.5.3 ByteTrack: Association with Low-Score Detections
 **ByteTrack** (Zhang et al., 2022) revolutionized multi-object tracking by demonstrating that true targets under occlusion are not absent; rather, their detection confidence scores simply drop below standard filtering thresholds (e.g., falling between $0.10$ and $0.45$). 
 
 Instead of discarding low-confidence bounding boxes, ByteTrack introduces a **two-stage bipartite matching algorithm**:
 1. **First Association Stage:** High-confidence detections ($\mathcal{D}_{\text{high}}$, score $\ge \tau_{\text{high}}$) are associated with active tracks $\mathcal{T}$ via Hungarian IoU matching.
 2. **Second Association Stage:** Remaining unmatched active tracks ($\mathcal{T}_{\text{remain}}$) are matched against low-confidence detections ($\mathcal{D}_{\text{low}}$, $\tau_{\text{low}} \le \text{score} < \tau_{\text{high}}$).
 
-This preserves track continuity during heavy occlusions (such as a swaddled infant temporarily blocked by an adult's arm) without requiring expensive deep visual appearance extractors.
+This preserves track continuity during heavy occlusions without requiring expensive deep visual appearance extractors.
 
 ```
                   All Detections at Frame t
@@ -154,26 +233,37 @@ This preserves track continuity during heavy occlusions (such as a swaddled infa
                                     Tracks       (Buffer)
 ```
 
-### 2.3.4 BoT-SORT: Motion Compensation & State Expansion
+### 2.5.4 BoT-SORT: Motion Compensation & State Expansion
 **BoT-SORT** (Aharon et al., 2022) addresses the vulnerability of classical Kalman filters to camera ego-motion. In mobile or panning surveillance feeds, camera jitter shifts pixel coordinates, invalidating constant-velocity assumptions. BoT-SORT integrates:
 1. **Camera Motion Compensation (CMC):** Uses OpenCV Global Motion Estimation (GME) with affine transformation matrices $\mathbf{M} \in \mathbb{R}^{2 \times 3}$ to warp the prior state covariance and mean into the new frame reference frame:
    $$\mathbf{x}_{t|t-1}' = \mathbf{M} \mathbf{x}_{t|t-1}, \quad \mathbf{P}_{t|t-1}' = \mathbf{M} \mathbf{P}_{t|t-1} \mathbf{M}^T$$
 2. **Modified State Vector:** Directly tracks bounding box width $w$ and height $h$ instead of scale and aspect ratio, improving tracking responsiveness on non-rigid pedestrian bounding boxes.
 
-### 2.3.5 OC-SORT: Observation-Centric Momentum Recovery
+### 2.5.5 OC-SORT: Observation-Centric Momentum Recovery
 **OC-SORT** (Cao et al., 2023) resolves error accumulation in Kalman filters during long-term occlusions. When an object is occluded for multiple frames, linear state extrapolation diverges from reality. OC-SORT introduces **Observation-Centric Momentum (OCM)** and **Observation-Centric Online Smoothing (OCOS)**, re-calculating motion vectors retrospectively once an observation is re-acquired:
 
 $$\mathbf{v}_{\text{corrected}} = \frac{\mathbf{z}_{t_{\text{reappear}}} - \mathbf{z}_{t_{\text{lost}}}}{t_{\text{reappear}} - t_{\text{lost}}}$$
 
 This prevents catastrophic track drift during non-linear patient movement in crowded waiting rooms.
 
+### 2.5.6 FastTracker with Parent-Child Spatial Anchoring
+In pediatric triage scenarios where infants are carried against an adult's torso, bounding boxes of the adult and infant exhibit sustained, high-IoU geometric overlap ($\text{IoU} \approx 0.30 - 0.65$) while sharing identical spatial velocity vectors:
+
+$$\mathbf{v}_{\text{child}} \approx \mathbf{v}_{\text{parent}}$$
+
+Standard trackers frequently cause **ID swapping** between the parent and child when bounding boxes intersect. **FastTracker** introduces a **Parent-Child Spatial Anchoring Protocol**:
+- When a pediatric bounding box $B_{\text{child}}$ is detected within the convex spatial hull of an adult bounding box $B_{\text{parent}}$, the child's track ID is anchored to the parent's trajectory.
+- Velocity updates for the infant track incorporate an exponential moving average (EMA) blend with the parent's centroid displacement:
+$$\mathbf{v}_{\text{child}}^{(t)} = (1 - \gamma)\mathbf{v}_{\text{child}}^{(t)} + \gamma \mathbf{v}_{\text{parent}}^{(t)}$$
+- If the child detection is temporarily lost due to swaddling, the anchor maintains the child track's virtual position at a fixed relative offset $(\Delta x, \Delta y)$ from the parent centroid, preventing track termination and duplicate re-spawning.
+
 ---
 
-## 2.4 Illumination Normalization & Contrast Enhancement in Computer Vision
+## 2.6 Illumination Normalization & Contrast Enhancement in Computer Vision
 
 Clinical emergency waiting rooms frequently exhibit suboptimal lighting conditions—ranging from harsh overhead fluorescent glare to dim night-shift ambient illumination. In poorly lit environments, pixel intensity histograms become compressed into narrow low-value ranges, degrading edge gradients and causing convolutional kernels to miss faint infant body contours.
 
-### 2.4.1 Global Histogram Equalization (GHE) vs. CLAHE
+### 2.6.1 Global Histogram Equalization (GHE) vs. CLAHE
 Standard Global Histogram Equalization (GHE) flattens the global image histogram by applying a monotonic mapping derived from the Cumulative Distribution Function (CDF):
 
 $$s_k = T(r_k) = (L - 1) \sum_{j=0}^k p_r(r_j) = \frac{L - 1}{N} \sum_{j=0}^k n_j$$
@@ -200,7 +290,7 @@ $$N_{\text{clip}} = \frac{N_{\text{pixels}}}{N_{\text{bins}}} \left( 1 + \frac{\
       CLAHE Local Mapping + Bilinear Blend ──► Enhanced Contrast Output
 ```
 
-### 2.4.2 LAB Color Space vs. RGB Processing
+### 2.6.2 LAB Color Space vs. RGB Processing
 Applying CLAHE directly to independent Red, Green, and Blue (RGB) color channels causes severe chromatic distortion and unnatural color shifts. This thesis implements CLAHE within the **CIE $L^*a^*b^*$ color space**:
 - **$L^*$ Channel:** Represents perceptual lightness ($0 \le L^* \le 100$).
 - **$a^*$ Channel:** Represents green-to-red chromaticity.
@@ -210,7 +300,7 @@ By isolating and applying CLAHE exclusively to the $L^*$ luminance channel while
 
 ---
 
-## 2.5 Perspective Geometry & Ground-Plane Scale Invariance
+## 2.7 Perspective Geometry & Ground-Plane Scale Invariance
 
 In typical clinical CCTV installations, cameras are mounted on walls or ceilings at an elevated angle $\theta$, pointing downward toward the triage floor. This creates a perspective projection where the physical ground distance $Z$ from the camera correlates non-linearly with vertical pixel position $y$.
 
@@ -236,7 +326,7 @@ In uncalibrated surveillance cameras lacking depth sensors, vertical bounding bo
 
 ---
 
-## 2.6 Edge Computing vs. Cloud Streaming in Medical Informatics
+## 2.8 Edge Computing vs. Cloud Streaming in Medical Informatics
 
 Deploying artificial intelligence in clinical environments requires strict adherence to privacy regulations (HIPAA in the United States, GDPR in the European Union) and high operational resilience (Shickel et al., 2019).
 
@@ -259,12 +349,13 @@ Edge computing—executing deep learning inference directly on local on-premise 
 
 ---
 
-## 2.7 Summary & Identification of Research Gaps
+## 2.9 Summary & Identification of Research Gaps
 
-The literature establishes powerful individual components: YOLO for single-stage detection, ByteTrack for low-score tracking, and CLAHE for illumination enhancement. However, critical research gaps remain unaddressed in existing literature:
+The literature establishes powerful individual components: YOLO for single-stage detection, DINOv3 for foundation vision representations, SAHI for high-resolution patch slicing, ByteTrack for low-score tracking, and CLAHE for illumination enhancement. However, critical research gaps remain unaddressed in existing literature:
 
-1. **Lack of Dynamic Multi-Tracker Adaptation:** Existing MOT benchmarks evaluate trackers under static conditions. In clinical triage, sudden camera vibrations or sudden crowd occlusions degrade static tracker performance. No existing framework dynamically assesses live scene motion and occlusion density to route frames adaptively across specialized tracking algorithms.
-2. **Absence of Spatial Centroid Fallback:** ByteTrack drops tracks when targets are occluded beyond its buffer window, leading to duplicate ID assignment upon re-emergence. A spatial centroid fallback re-identification mechanism is needed to resolve untracked detections without incurring deep neural Re-ID latency.
-3. **Decoupled Architecture Void:** Most medical CV implementations rely on heavy multi-service architectures (FastAPI backends + React/Laravel frontends connected via WebSockets), introducing synchronization lag and dropped frames. A unified, in-memory monolithic paradigm is required to deliver true zero-latency clinical intelligence on edge hardware.
+1. **Lack of Foundation Knowledge Distillation for Clinical Pediatric Occlusion:** Existing pediatric detection models rely exclusively on standard supervised transfer learning from COCO weights. No prior work has explored dense intermediate feature distillation from massive self-supervised Vision Transformers (DINOv3) into lightweight edge convolutional models (YOLO26s) specifically targeting swaddled and carried infants under physical occlusion.
+2. **Absence of Real-Time Dynamic Tracker Orchestration:** Existing MOT benchmarks evaluate trackers under static conditions. In clinical triage, sudden camera vibrations or sudden crowd occlusions degrade static tracker performance. No existing framework dynamically assesses live scene motion ($\Delta I$) and occlusion density ($\text{IoU}_{\text{pairwise}}$) to route frames adaptively across specialized tracking algorithms with hysteresis stabilization.
+3. **Absence of Spatial Centroid Fallback & Parent-Child Anchoring:** Standard trackers drop tracks when infants are occluded by caregivers' bodies, leading to duplicate ID assignment upon re-emergence. A dedicated spatial centroid fallback and parent-child anchoring mechanism is needed to resolve untracked detections without incurring deep neural Re-ID latency.
+4. **Decoupled Architecture Void:** Most medical CV implementations rely on heavy multi-service architectures (FastAPI backends + React/Laravel frontends connected via WebSockets), introducing synchronization lag and dropped frames. A unified, in-memory monolithic paradigm is required to deliver true zero-latency clinical intelligence on edge hardware.
 
-This thesis addresses these specific research gaps through the architecture and algorithms formulated in subsequent chapters.
+This thesis directly resolves these research gaps through the architecture, algorithms, and empirical evaluations formulated in subsequent chapters.

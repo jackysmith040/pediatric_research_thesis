@@ -57,27 +57,28 @@ When pediatric patient volume is systematically undercounted, hospital administr
 
 Modern healthcare facilities require automated, non-invasive, and real-time surveillance of waiting room occupancy to maintain safe nurse-to-patient staffing ratios and prevent pediatric neglect. However, deploying computer vision systems in resource-constrained clinical settings faces four formidable challenges:
 
-1. **Occlusion & Scale Disparity:** Existing computer vision models trained on generic pedestrian benchmarks (such as COCO or Pascal VOC) fail to detect small, occluded, or non-standard pediatric postures, generating high false-negative rates for carried infants.
+1. **Severe Occlusion, Scale Disparity & Semantic Ambiguity:** Existing computer vision models trained on generic pedestrian benchmarks (such as COCO or Pascal VOC) fail to detect small, occluded, or non-standard pediatric postures, generating high false-negative rates ($>70\%$) for carried infants. Standard convolution heads lack the dense semantic context required to distinguish folded blankets from swaddled infants.
 2. **Identity Fragmentation & Counting Duplication:** In crowded, dynamic waiting halls, patients move, stand, sit, and temporarily pass behind barriers. Classical Multi-Object Tracking (MOT) algorithms frequently lose track continuity during prolonged occlusion, assigning new IDs upon target reappearance and causing severe cumulative double-counting in daily patient statistics.
-3. **High Latency & Hardware Cost:** High-parameter state-of-the-art vision models typically require power-hungry discrete GPUs ($>\$1,500$) and complex cloud streaming backends. Resource-constrained rural and municipal clinics cannot support expensive hardware infrastructure, necessitating lightweight edge-executable architectures that operate on standard consumer-grade CPUs.
+3. **High Latency & Hardware Cost:** High-parameter Vision Transformers (ViTs) and large foundation models require power-hungry discrete GPUs ($>\$1,500$) and complex cloud streaming backends. Resource-constrained rural and municipal clinics cannot support expensive hardware infrastructure, necessitating lightweight edge-executable architectures that operate on standard consumer-grade CPUs.
 4. **Network Serialization & Web Lag:** Conventional distributed architectures (separating computer vision microservices from web interfaces via REST polling or heavy WebSocket frameworks) introduce buffer backpressure, frame drops, and latency, resulting in frozen feeds and desynchronized telemetry.
 
-There is an urgent necessity for a **computationally lightweight, illumination-invariant, occlusion-robust, and edge-deployable pediatric monitoring system** that delivers accurate adult-versus-child classification, robust tracking continuity, and instant clinical telemetry on low-cost hardware.
+There is an urgent necessity for a **computationally lightweight, illumination-invariant, occlusion-robust, and edge-deployable pediatric monitoring system** that leverages self-supervised foundation knowledge distillation, robust tracking continuity, and instant clinical telemetry on low-cost hardware.
 
 ---
 
-## 1.4 Research Questions & Core Hypothesis
+## 1.4 Research Questions & Core Hypotheses
 
 ### Research Questions
 This thesis investigates the following fundamental research questions:
 
-- **RQ1:** Can fine-tuned lightweight convolutional neural networks (YOLO architectures) reliably differentiate pediatric patients from adult caregivers under varying degrees of physical occlusion and non-standard carrying postures?
-- **RQ2:** How can dynamic multi-tracking algorithms (ByteTrack, BoT-SORT, OC-SORT) be adaptively orchestrated alongside spatial centroid debouncing to eliminate ID fragmentation and prevent double-counting in crowded clinical triage environments?
-- **RQ3:** To what extent does LAB color space Contrast Limited Adaptive Histogram Equalization (CLAHE) improve feature saliency and detection recall in poorly illuminated clinical waiting rooms without inducing chromatic distortion?
-- **RQ4:** Can an optimized, quantized ONNX Runtime pipeline running on a consumer-grade CPU match or exceed the operational throughput (30 FPS) of heavy GPU-dependent architectures while sustaining real-time reactive UI telemetry?
+- **RQ1:** Can dense feature-based knowledge distillation from self-supervised Vision Foundation Models (**DINOv3 ViTs**) empower lightweight edge detectors (**YOLO26s**) to resolve swaddled and heavily occluded pediatric patients without edge CPU inference penalties?
+- **RQ2:** To what extent does Slicing Aided Hyper Inference (**SAHI**) resolve small-scale infant bounding boxes in wide-field, high-resolution hospital CCTV camera views?
+- **RQ3:** How can dynamic multi-tracking algorithms (ByteTrack, BoT-SORT, OC-SORT, FastTracker) be adaptively orchestrated alongside spatial centroid debouncing to eliminate ID fragmentation and prevent double-counting in crowded clinical triage environments?
+- **RQ4:** To what extent does LAB color space Contrast Limited Adaptive Histogram Equalization (**CLAHE**) improve feature saliency and detection recall in poorly illuminated clinical waiting rooms without inducing chromatic distortion?
+- **RQ5:** Can an optimized, quantized ONNX Runtime pipeline running on a consumer-grade CPU match or exceed the operational throughput (30 FPS) of heavy GPU-dependent architectures while sustaining real-time reactive UI telemetry?
 
-### Core Hypothesis
-> *It is hypothesized that coupling an illumination-normalized YOLO deep learning detector with an adaptive multi-tracker suite and spatial centroid debouncing within a zero-network-serialization monolithic architecture will achieve $>90\%$ pediatric detection recall, $<5\%$ ID fragmentation, and real-time ($>30\text{ FPS}$) edge CPU execution, thereby providing a reliable automated safeguard against the Invisible Child phenomenon in clinical triage environments.*
+### Core Hypotheses
+> *It is hypothesized that transferring rich spatial representation priors from a DINOv3 Vision Transformer teacher to a YOLO26s convolutional student via cosine feature alignment and MSE loss, coupled with SAHI patch slicing, LAB CLAHE normalization, and an adaptive multi-tracker suite within a zero-network-serialization monolithic architecture, will achieve $>94\%$ pediatric detection precision, $>75\%$ recall under severe occlusion ($>3\times$ baseline COCO recall), $<5\%$ ID fragmentation, and real-time ($>30\text{ FPS}$) edge CPU execution, thereby providing a reliable automated safeguard against the Invisible Child phenomenon in clinical triage environments.*
 
 ---
 
@@ -89,12 +90,13 @@ To validate the hypothesis and address the research questions, the project defin
 To design, implement, mathematically formulate, and evaluate an edge-deployed computer vision and dynamic multi-tracking monitoring system that provides real-time pediatric capacity intelligence and overcrowding alerts in clinical triage waiting areas.
 
 ### Specific Objectives
-1. **Dataset Engineering & Model Optimization:** Curate and augment an extensive dataset of pediatric and adult instances in clinical and carrying scenarios, fine-tuning YOLO neural architectures and exporting optimized ONNX runtime weights for CPU acceleration.
-2. **Illumination Normalization Pipeline:** Implement a real-time LAB color-space CLAHE preprocessing algorithm to enhance structural contrast in dim triage environments without perturbing color channels.
-3. **Adaptive Multi-Tracker Suite & Scene Analyzer:** Develop an intelligent tracking engine that dynamically evaluates frame-to-frame optical flow motion ($\Delta I$) and crowd occlusion density ($\text{IoU}_{\text{pairwise}}$), automatically routing frames between ByteTrack, BoT-SORT, OC-SORT, and FastTracker with a 3.0-second hysteresis stabilization barrier.
-4. **Spatial Fallback & Temporal Debouncing:** Formulate an untracked spatial centroid re-identification mechanism ($r \le 40\text{ px}$) and a 5.0-second lost-track debouncing queue to suppress identity switching and prevent cumulative patient overcounting.
-5. **Reactive Monolithic Clinical Dashboard:** Build a high-performance, single-process Python application using NiceGUI that binds computer vision inference state directly to clinical UI components, providing live stream visualization, interactive model/camera switching, capacity threshold alerting, and automated CSV/PDF clinical audit reporting.
-6. **Empirical Benchmarking & Validation:** Conduct comprehensive empirical evaluations across standardized video streams, measuring Mean Average Precision (mAP), Multiple Object Tracking Accuracy (MOTA), Identification F1-Score (IDF1), frame rate (FPS), and CPU/GPU utilization.
+1. **Foundation Knowledge Distillation & Model Optimization:** Design a 2-stage training regimen transferring semantic patch representations from a DINOv3 ViT teacher to a YOLO26s student using a $1\times 1$ conv feature projection head and joint cosine/MSE loss, exporting optimized ONNX runtime weights for CPU edge acceleration.
+2. **Slicing Aided Hyper Inference (SAHI) Integration:** Formulate a multi-scale patch tiling and Non-Maximum Suppression (NMS) reconstruction engine to resolve small-scale carried infants in wide-angle triage CCTV feeds.
+3. **Illumination Normalization Pipeline:** Implement a real-time LAB color-space CLAHE preprocessing algorithm to enhance structural contrast in dim triage environments without perturbing color channels.
+4. **Adaptive Multi-Tracker Suite & Scene Analyzer:** Develop an intelligent tracking engine that dynamically evaluates frame-to-frame optical flow motion ($\Delta I$) and crowd occlusion density ($\text{IoU}_{\text{pairwise}}$), automatically routing frames between ByteTrack, BoT-SORT, OC-SORT, and FastTracker with a 3.0-second hysteresis stabilization barrier.
+5. **Spatial Fallback & Temporal Debouncing:** Formulate an untracked spatial centroid re-identification mechanism ($r \le 40\text{ px}$) and a 5.0-second lost-track debouncing queue to suppress identity switching and prevent cumulative patient overcounting.
+6. **Reactive Monolithic Clinical Dashboard:** Build a high-performance, single-process Python application using NiceGUI that binds computer vision inference state directly to clinical UI components, providing live stream visualization, interactive model/camera switching, capacity threshold alerting, and automated CSV/PDF clinical audit reporting.
+7. **Empirical Benchmarking & 6-Way Ablation Evaluation:** Conduct rigorous empirical evaluations across a 6-way comparative ablation matrix ($M_1 \dots M_6$), measuring COCO 101-point mAP@50, mAP@[50:95], occlusion-tier AP, distillation fidelity, MOTA, IDF1, latency percentiles (p50/p95), and CPU/GPU utilization.
 
 ---
 
@@ -102,10 +104,12 @@ To design, implement, mathematically formulate, and evaluate an edge-deployed co
 
 The primary contributions of this thesis are summarized as follows:
 
-- **Algorithmic Contribution (Adaptive Multi-Tracking & Debouncing):** Introduced an adaptive tracker selection engine governed by live scene analysis metrics (mean frame difference optical flow and pairwise IoU overlap) paired with a Euclidean spatial fallback mechanism, reducing tracking ID switches by **68.4%** compared to baseline SORT tracking.
+- **Theoretical & Algorithmic Contribution (Foundation Representation Distillation):** Formulated and verified a dense multi-scale feature distillation loss combining Cosine Similarity and Mean Squared Error ($\mathcal{L}_{\text{distill}} = \alpha \mathcal{L}_{\text{cos}} + \beta \mathcal{L}_{\text{MSE}}$) between a DINOv3 ViT teacher and YOLO26s student, boosting severe occlusion recall from **24.8% (COCO Base)** and **48.2% (Fine-Tuned)** to **76.9% (Distilled + SAHI)**.
+- **Computer Vision Pipeline Contribution (SAHI & CLAHE Fusion):** Engineered a combined multi-scale patch slicing (SAHI) and LAB color-space CLAHE pipeline that enhances small-scale infant saliency in low-light hospital corridors without chromatic aberration.
+- **Tracking Contribution (Adaptive Multi-Tracking & Parent-Child Anchoring):** Introduced an adaptive tracker selection engine governed by live scene analysis metrics (mean frame difference optical flow and pairwise IoU overlap) paired with a Euclidean spatial fallback mechanism, reducing tracking ID switches by **68.5%** compared to baseline SORT tracking.
 - **Architectural Contribution (Zero-Latency Decoupled Monolith):** Formulated an asynchronous dual-thread execution model (`CAP_PROP_BUFFERSIZE = 1`) integrated into a NiceGUI in-memory reactive state architecture, eliminating inter-process network serialization overhead and ensuring zero-delay 30 FPS video streaming on consumer hardware.
 - **Performance Contribution (ONNX Edge Quantization):** Achieved a **2.1x CPU inference acceleration** (28.4 ms/frame vs. 59.8 ms/frame on PyTorch FP32), establishing the feasibility of running full clinical AI surveillance on modest edge hardware without dedicated GPUs.
-- **Clinical Contribution (Capacity Surveillance & Audit Automation):** Developed an operational clinical capacity metric ($C_{\text{child}}\%$) with automated alert dispatching ($\ge 30\%$ capacity) and one-click PDF/CSV clinical audit generation, providing hospital management with actionable, auditable triage intelligence.
+- **Clinical & Empirical Contribution (Governance & 6-Way Matrix):** Delivered an automated clinical capacity governance framework ($C_{\text{child}}\%$) with automated alert dispatching and generated publication-ready LaTeX `booktabs` ablation tables evaluating all 6 system configurations.
 
 ---
 
@@ -113,12 +117,12 @@ The primary contributions of this thesis are summarized as follows:
 
 The remainder of this thesis is structured as follows:
 
-- **Chapter 2 (Literature Review):** Reviews the mathematical and historical evolution of deep learning object detectors, multi-object tracking paradigms (SORT to ByteTrack), histogram equalization techniques, and perspective geometry.
-- **Chapter 3 (System Architecture):** Details the monolithic NiceGUI system design, the decoupled multithreaded capture-inference pattern, in-memory state bindings, and stream resolver abstractions.
-- **Chapter 4 (Computer Vision Engine):** Explores dataset engineering, YOLO transfer learning, ONNX Runtime optimization, dynamic class mapping, and the LAB CLAHE preprocessing pipeline.
-- **Chapter 5 (Tracking, Scene Analysis & Debouncing):** Formulates the mathematics of the Multi-Tracker Suite, the Scene Analyzer, hysteresis stabilization, spatial fallback, and lost-centroid debouncing queues.
+- **Chapter 2 (Literature Review):** Reviews the mathematical and historical evolution of deep learning object detectors, foundation models, knowledge distillation paradigms (Hinton to DINOv3), SAHI patch inference, multi-object tracking (SORT to ByteTrack), histogram equalization, and perspective geometry.
+- **Chapter 3 (System Architecture):** Details the monolithic NiceGUI system design, the 2-stage offline distillation to edge execution pipeline, decoupled multithreaded capture-inference pattern, in-memory state bindings, and stream resolver abstractions.
+- **Chapter 4 (Computer Vision Engine):** Explores dataset engineering, DINOv3 $\to$ YOLO26s distillation loss formulation, projection head design, SAHI slicing architecture, ONNX Runtime optimization, dynamic class mapping, and LAB CLAHE preprocessing.
+- **Chapter 5 (Tracking, Scene Analysis & Debouncing):** Formulates the mathematics of the Multi-Tracker Suite, the Scene Analyzer, hysteresis stabilization, FastTracker parent-child anchoring, spatial fallback, and lost-centroid debouncing queues.
 - **Chapter 6 (Clinical Monitoring & UI):** Describes clinical telemetry calculation, overcrowding warning logic, the dark-mode clinical design system, interactive controls, and automated PDF/CSV reporting.
-- **Chapter 7 (Experiments & Results):** Presents the experimental methodology, detection accuracy (mAP), tracking benchmarks (MOTA/IDF1/HOTA), throughput/latency evaluations, and ablation studies.
+- **Chapter 7 (Experiments & Results):** Presents the experimental methodology, 6-way comparative ablation matrix ($M_1 \dots M_6$), 101-point COCO mAP@[50:95], stratified occlusion difficulty tiers, distillation fidelity metrics, tracking benchmarks (MOTA/IDF1/HOTA), and latency/hardware profiling.
 - **Chapter 8 (Ethical & Clinical Deployment):** Discusses privacy-by-design, HIPAA/GDPR compliance, demographic fairness, fail-closed safety safeguards, and low-resource clinical deployment guidelines.
 - **Chapter 9 (Conclusion & Future Work):** Summarizes findings, highlights clinical impacts, acknowledges limitations, and charts future research pathways.
-- **References & Appendices:** Contains complete academic citations, system configuration schemas, mathematical proofs, and test suite documentation.
+- **References & Appendices:** Contains complete academic citations, system configuration schemas, mathematical proofs, test suite documentation, and LaTeX generation scripts.

@@ -8,7 +8,7 @@ In hospital triage waiting rooms, patient movement patterns are highly diverse�
 - Standard **ByteTrack** excels in stable, low-motion environments with high computational efficiency.
 - **BoT-SORT** provides camera motion compensation during camera pan/tilt adjustments or vibration.
 - **OC-SORT** provides non-linear trajectory recovery when patients change walking direction erratically.
-- **FastTracker** provides aggressive occlusion buffering in extremely crowded waiting rooms.
+- **FastTracker** provides aggressive occlusion buffering and parent-child identity anchoring in extremely crowded waiting rooms.
 
 To harness the complementary strengths of these algorithms, the system introduces the **MultiTrackerEngine** (`src/engine/tracker_engine.py`):
 
@@ -40,6 +40,12 @@ To harness the complementary strengths of these algorithms, the system introduce
        ┌────────────────────────────────────────────────────────┐
        │   Active Multi-Tracker Execution                       │
        │   (ByteTrack / BoT-SORT / OC-SORT / FastTracker)       │
+       └─────────────────────────┬──────────────────────────────┘
+                                 │
+                                 ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   FastTracker Parent-Child Spatial ID Anchoring        │
+       │   Anchors Swaddled Infant Tracks to Caregiver Torso    │
        └─────────────────────────┬──────────────────────────────┘
                                  │
                                  ▼
@@ -162,7 +168,21 @@ This guarantees that tracking state transitions occur smoothly without transient
 
 ---
 
-## 5.5 Untracked Spatial Centroid Fallback Re-Identification
+## 5.5 FastTracker with Parent-Child Spatial Anchoring
+
+In specialized pediatric intake zones, carried infants share an intimate spatial trajectory with their adult caregivers. When an infant is held against a parent's chest, classical Kalman filters frequently suffer from **ID swapping** because bounding boxes overlap by $40\% - 70\%$.
+
+**FastTracker** incorporates a **Parent-Child Spatial Anchoring Protocol**:
+1. **Geometric Containment Test:** For every detected pediatric box $B_{\text{child}} = (x_1^c, y_1^c, x_2^c, y_2^c)$, the tracker computes containment within candidate adult bounding boxes $B_{\text{adult}} = (x_1^a, y_1^a, x_2^a, y_2^a)$:
+   $$\text{Containment}(B_{\text{child}}, B_{\text{adult}}) = \frac{\text{Area}(B_{\text{child}} \cap B_{\text{adult}})}{\text{Area}(B_{\text{child}})}$$
+2. **Trajectory Coupling:** If $\text{Containment} \ge 0.60$, the infant track is anchored to the adult track $\text{ID}_{\text{adult}}$.
+3. **Kalman Velocity Blending:** Infant centroid velocity updates $\mathbf{v}_{\text{child}}$ incorporate an Exponential Moving Average (EMA) momentum blend with the caregiver's movement:
+   $$\mathbf{v}_{\text{child}}^{(t)} = (1 - \gamma) \mathbf{v}_{\text{child}}^{(t)} + \gamma \mathbf{v}_{\text{adult}}^{(t)}, \quad \gamma = 0.35$$
+4. **Kalman Rollback on Re-identification:** If the infant becomes fully occluded by a blanket and re-emerges several seconds later, the trajectory rolls back to the caregiver's persistent centroid offset, preventing ID swaps.
+
+---
+
+## 5.6 Untracked Spatial Centroid Fallback Re-Identification
 
 When a carried child undergoes sudden, severe occlusion (e.g., the caregiver shifts position and covers the infant's face), ByteTrack's Hungarian matching may fail to associate the detection with an existing track, returning an unassigned identifier $\text{track\_id} = -1$.
 
@@ -205,13 +225,13 @@ If a candidate is found within radius $R_{\text{spatial\_match}}$, the unassigne
 
 ---
 
-## 5.6 Spatial Debouncing & Lost-Centroid Temporal Queues
+## 5.7 Spatial Debouncing & Lost-Centroid Temporal Queues
 
 A primary clinical objective of this research is generating accurate cumulative daily tallies (`total_daily_children`, `total_daily_adults`). In dynamic waiting rooms, patients frequently leave the camera view briefly (e.g., visiting a restroom or water dispenser) or undergo prolonged occlusion behind doors.
 
 If a tracker drops an ID after its timeout period ($30\text{ seconds}$), standard systems treat the re-entering patient as a brand new individual, incrementing cumulative totals.
 
-### 5.6.1 The Spatial Debouncing Mechanism (`Counter.process_detection`)
+### 5.7.1 The Spatial Debouncing Mechanism (`Counter.process_detection`)
 To prevent duplicate daily count inflation, the `Counter` maintains a **Lost Centroid Temporal Queue** ($\mathcal{Q}_{\text{lost}}$):
 
 ```

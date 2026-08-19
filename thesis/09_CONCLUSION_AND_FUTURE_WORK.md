@@ -6,7 +6,7 @@
 
 This thesis addressed a critical and pervasive failure mode in emergency healthcare informatics: the **"Invisible Child" phenomenon**, wherein carried, occluded, or lethargic pediatric patients in crowded hospital waiting halls are overlooked by manual triage headcounts, leading to severe pediatric triage delays and preventable mortality.
 
-To overcome this clinical crisis, this research designed, mathematically formulated, implemented, and empirically validated **The Invisible Child: Pediatric Monitor**—a real-time, edge-deployed computer vision and dynamic multi-tracking system.
+To overcome this clinical crisis, this research designed, mathematically formulated, implemented, and empirically validated **The Invisible Child: Pediatric Monitor**—a real-time, edge-deployed computer vision and dynamic multi-tracking system powered by **Vision Foundation Knowledge Distillation (DINOv3 $\to$ YOLO26s)** and **Slicing Aided Hyper Inference (SAHI)**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -14,12 +14,13 @@ To overcome this clinical crisis, this research designed, mathematically formula
 │                                                                         │
 │  Milestone                     Result Achieved                          │
 │  ─────────────────────────────────────────────────────────────────────  │
-│  Pediatric Detection Accuracy  mAP@0.5 = 0.912 (Dual-Class) /           │
-│                                mAP@0.5 = 0.948 (Kids-Only Model)        │
+│  Proposed System (M6) Accuracy mAP@50 = 94.6% / mAP@[50:95] = 81.2%     │
+│  Severe Occlusion Recall       76.9% mAP (3.1x Recall Boost vs. Base)   │
+│  Distillation Cosine Fidelity  0.894 Mean Cosine Similarity / 0.042 MSE │
 │  Tracking Continuity (MOTA)    84.6% MOTA / 87.2% IDF1                  │
 │  ID Switch Reduction           68.5% Reduction vs. Baseline ByteTrack   │
 │  Edge Execution Speedup        2.1x CPU Speedup via ONNX Quantization   │
-│                                (28.4 ms / 30.2 FPS on Consumer CPU)     │
+│                                (28.4 ms / 35.2 FPS on Consumer CPU)     │
 │  Streaming Latency             Zero Frame Buffer Lag via Decoupled      │
 │                                Dual-Thread Capture (`BUFFERSIZE = 1`)   │
 │  Clinical Governance           Automated Capacity Alerts (>=30%) &      │
@@ -27,21 +28,25 @@ To overcome this clinical crisis, this research designed, mathematically formula
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-The system successfully consolidated complex computer vision, multi-algorithm tracking, image enhancement, and a reactive clinical user interface into a single, cohesive, zero-network-serialization Python monolith powered by NiceGUI.
+The system successfully consolidated complex computer vision, self-supervised foundation representation transfer, multi-algorithm tracking, image enhancement, and a reactive clinical user interface into a single, cohesive, zero-network-serialization Python monolith powered by NiceGUI.
 
 ---
 
 ## 9.2 Key Clinical Findings & Theoretical Insights
 
-1. **Decoupling Frame Capture from Neural Inference is Essential:**  
+1. **Foundation Knowledge Distillation Bridges the Edge Capacity Gap:**  
+   Transferring dense semantic patch representations from a massive DINOv3 Vision Transformer teacher into a lightweight YOLO26s student via joint cosine/MSE loss boosted heavy occlusion recall from $24.8\%$ to $68.4\%$ without adding any runtime latency on edge CPUs.
+2. **SAHI Multi-Scale Slicing Eliminates Small-Object Scale Collapse:**  
+   Tiling wide-angle 1080p hospital CCTV frames into overlapping $640\times 640$ patches magnified tiny infant features, pushing overall detection accuracy to **94.6% mAP@50** and **76.9% under heavy occlusion**.
+3. **Decoupling Frame Capture from Neural Inference is Essential:**  
    The investigation proved that standard single-loop video pipelines fail due to OpenCV hardware buffer accumulation. The decoupled dual-thread capture-draining architecture completely eliminated frame lag, guaranteeing real-time 30 FPS video streaming.
-2. **Dynamic Multi-Tracking Outperforms Static Baselines:**  
+4. **Dynamic Multi-Tracking Outperforms Static Baselines:**  
    Evaluating tracking under live scene dynamics revealed that static trackers degrade when camera motion or mutual target occlusion shifts. The proposed `SceneAnalyzer` (combining optical flow frame difference and pairwise IoU density with a 3.0-second hysteresis barrier) achieved the highest overall tracking stability (**84.6% MOTA**).
-3. **Spatial Centroid Fallback Eliminates Occlusion ID Fragmentation:**  
+5. **Spatial Centroid Fallback & Parent-Child Anchoring Eliminate Occlusion ID Fragmentation:**  
    Carried infants temporarily obscured by caregivers' arms drop detection confidence below tracking association limits. The spatial centroid fallback matching mechanism ($r \le 40.0\text{ px}$) and 5.0-second lost-track debouncing queue reduced identity switches by **68.5%**, preventing cumulative patient overcounting.
-4. **LAB Color Space CLAHE Preserves Chromatic Integrity:**  
+6. **LAB Color Space CLAHE Preserves Chromatic Integrity:**  
    Isolating contrast enhancement to the $L^*$ luminance channel boosted low-light pediatric detection recall by **+15.3 percentage points** without altering skin tones or introducing color distortion.
-5. **Edge CPUs are Fully Capable of Real-Time Clinical Vision:**  
+7. **Edge CPUs are Fully Capable of Real-Time Clinical Vision:**  
    By exporting PyTorch models to ONNX Runtime graphs, the system achieved a **2.1x inference speedup**, proving that expensive discrete GPUs are not mandatory for robust clinical AI surveillance.
 
 ---
@@ -94,6 +99,8 @@ To build upon the foundations established in this thesis, future research will p
 4. **Contactless Remote Vital Sign Estimation (rPPG):**  
    Coupling the pediatric facial bounding box pipeline with remote photoplethysmography (rPPG) algorithms will allow the system to estimate heart rate and respiratory rate non-invasively from ambient video, transforming the monitor from a capacity counter into an active physiological deterioration alarm.
 
+---
+
 ## 9.5 Academic Submission & Typesetting Roadmap
 
 To ensure compliance with university and departmental academic submission standards, the thesis is structured according to the formal academic monograph roadmap:
@@ -110,8 +117,8 @@ To ensure compliance with university and departmental academic submission standa
 │  Margins             1.5" Left Margin (Binding Gutter), 1.0" Standard   │
 │                      Top, Bottom, and Right Margins                     │
 │  Pagination          Roman numerals (i–x) for Preliminaries;             │
-│                      Arabic numerals (1–80+) for Chapters 1–11          │
-│  Total Page Volume   ~75 to 85 Pages (including Preliminaries,          │
+│                      Arabic numerals (1–95) for Chapters 1–11           │
+│  Total Page Volume   ~85 to 95 Pages (including Preliminaries,          │
 │                      Figures, Equations, Tables, and Appendices)        │
 │  Binding             Standard Hardcover Binding (Navy / Burgundy Gold)  │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -119,4 +126,3 @@ To ensure compliance with university and departmental academic submission standa
 
 ---
 *Through the mathematical and computational innovations delivered in this thesis, automated, privacy-preserving clinical computer vision stands ready to eliminate the Invisible Child phenomenon, safeguarding vulnerable pediatric lives in hospital emergency departments worldwide.*
-

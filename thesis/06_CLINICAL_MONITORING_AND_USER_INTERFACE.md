@@ -109,7 +109,7 @@ The system implements a **Dark-Mode Clinical Design System** (`src/ui/components
 │  │                               │  │  ┌──────────────────────────┐  │  │
 │  │                               │  │  │ OVERCROWDING ALARM: OK   │  │  │
 │  │                               │  │  └──────────────────────────┘  │  │
-│  └───────────────────────────────┘  └────────────────────────────────┘  │
+│  │  └───────────────────────────────┘  └────────────────────────────────┘  │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │ CONTROLS: [AI Model Select ▼] [Camera Source ▼] [Export PDF / CSV]│  │
@@ -125,16 +125,15 @@ To ensure video overlays do not obscure critical medical observations:
 
 ---
 
-## 6.4 Real-Time Interactive Controls & Dynamic Selectors
+## 6.4 Multi-Model Comparative Evaluation Lab (`/video-test`)
 
-The user interface exposes rich runtime controls across both `/dashboard` and `/video-test`:
-
-1. **AI Model Selector:**  
-   Dropdown allowing clinical operators to dynamically switch between PyTorch FP32 models (`pediatric-model.pt`), high-speed quantized ONNX Runtime models (`pediatric-model.onnx`), dedicated single-class models (`pediatric-kids-only.pt`), and base COCO models.
-2. **Video Source Selector:**  
-   Dropdown supporting instant switching between physical Webcams (`0`, `1`), RTSP streams, local MP4 files, and curated YouTube clinical triage feeds.
-3. **Multi-Tracker Mode Selector:**  
-   Allows toggling between `Auto (Situation-Adaptive)` mode and explicit manual tracker selections (`ByteTrack`, `BoT-SORT`, `OC-SORT`, `FastTracker`).
+In addition to the operational command center (`/dashboard`), the system provides a specialized **Interactive Evaluation & Stream Testing Lab** (`src/ui/evaluation.py`):
+- **Live Side-by-Side Model Swapping:** Allows clinicians, researchers, and audit personnel to dynamically toggle between:
+  1. Base Pretrained YOLO26s ($M_1$)
+  2. Traditional Fine-Tuned YOLO26s ($M_2$)
+  3. DINOv3 Distilled YOLO26s ($M_3$ - SOTA)
+  4. Sliced SAHI Configurations ($M_4, M_5, M_6$)
+- **Real-Time Feature Inspection:** Displays bounding box confidence histograms, IoU distribution maps, CLAHE contrast toggles, and live FPS/latency diagnostics.
 
 ---
 
