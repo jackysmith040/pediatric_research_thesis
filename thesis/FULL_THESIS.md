@@ -169,8 +169,13 @@ $$C_{\text{child}}\%(t) = \left( \frac{\text{current\_children}(t)}{K_{\text{cap
 
 ---
 
-## 9. Conclusion
+## 9. Conclusion & Academic Submission Roadmap
 The Invisible Child Pediatric Monitor successfully resolves a critical vulnerability in clinical triage. By uniting deep learning object detection, adaptive multi-tracking, spatial centroid debouncing, and a zero-latency monolithic user interface, the system delivers publication-grade computer vision intelligence on affordable edge hardware, ensuring no child in emergency waiting halls remains unseen.
+
+### Standard Academic Thesis Format (Recommended for KNUST / University Submission):
+- **Font:** `12pt Times New Roman` / `Computer Modern` (LaTeX)
+- **Spacing:** `1.5` line spacing, `1.5"` left margin (for binding), `1.0"` standard margins
+- **Total Length:** **~75 to 85 pages** (including preliminaries, figures, equations, and appendices)
 
 ---
 *Kwame Nkrumah University of Science and Technology (KNUST) — Department of Mathematics (2026)*

@@ -94,5 +94,29 @@ To build upon the foundations established in this thesis, future research will p
 4. **Contactless Remote Vital Sign Estimation (rPPG):**  
    Coupling the pediatric facial bounding box pipeline with remote photoplethysmography (rPPG) algorithms will allow the system to estimate heart rate and respiratory rate non-invasively from ambient video, transforming the monitor from a capacity counter into an active physiological deterioration alarm.
 
+## 9.5 Academic Submission & Typesetting Roadmap
+
+To ensure compliance with university and departmental academic submission standards, the thesis is structured according to the formal academic monograph roadmap:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│              ACADEMIC THESIS SUBMISSION & TYPESETTING ROADMAP           │
+│                                                                         │
+│  Specification       Standard Academic Thesis Format                    │
+│                      (Recommended for KNUST / University Submission)     │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  Typography / Font   12pt Times New Roman / Computer Modern (LaTeX)     │
+│  Line Spacing        1.5 Line Spacing                                   │
+│  Margins             1.5" Left Margin (Binding Gutter), 1.0" Standard   │
+│                      Top, Bottom, and Right Margins                     │
+│  Pagination          Roman numerals (i–x) for Preliminaries;             │
+│                      Arabic numerals (1–80+) for Chapters 1–11          │
+│  Total Page Volume   ~75 to 85 Pages (including Preliminaries,          │
+│                      Figures, Equations, Tables, and Appendices)        │
+│  Binding             Standard Hardcover Binding (Navy / Burgundy Gold)  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 *Through the mathematical and computational innovations delivered in this thesis, automated, privacy-preserving clinical computer vision stands ready to eliminate the Invisible Child phenomenon, safeguarding vulnerable pediatric lives in hospital emergency departments worldwide.*
+

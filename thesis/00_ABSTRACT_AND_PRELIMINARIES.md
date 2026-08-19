@@ -222,3 +222,15 @@ Extensive empirical evaluations across benchmark video datasets and live clinica
 | **UVC** | USB Video Class |
 | **V4L2** | Video4Linux2 |
 | **YOLO** | You Only Look Once (Object Detection Framework) |
+
+---
+
+## Academic Typesetting & Submission Specifications
+
+**Standard Academic Thesis Format (Recommended for KNUST / University Submission):**
+- **Typography / Font:** `12pt Times New Roman` or `Computer Modern` (LaTeX)
+- **Line Spacing:** `1.5` line spacing
+- **Margins:** `1.5"` Left margin (for binding gutter), `1.0"` Top, Bottom, and Right standard margins
+- **Pagination:** Lowercase Roman numerals (`i–x`) for Preliminaries; Arabic numerals (`1–85`) for Chapters 1 through 11
+- **Total Estimated Length:** **~75 to 85 pages** (including preliminaries, figures, and appendices)
+

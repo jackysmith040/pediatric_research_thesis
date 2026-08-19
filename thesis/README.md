@@ -96,6 +96,17 @@ This research presents a real-time, edge-deployed clinical computer vision syste
 
 ---
 
+## Academic Submission & Typesetting Roadmap
+
+### Standard Academic Thesis Format (Recommended for KNUST / University Submission):
+- **Font:** `12pt Times New Roman` or `Computer Modern` (LaTeX)
+- **Spacing:** `1.5` line spacing
+- **Margins:** `1.5"` Left margin (for bookbinding gutter), `1.0"` Top, Bottom, and Right standard margins
+- **Pagination:** Lowercase Roman numerals (`i–x`) for Preliminaries; Arabic numerals (`1–85`) for Chapters 1 through 11
+- **Total Estimated Length:** **~75 to 85 pages** (including preliminaries, theoretical proofs, architecture diagrams, benchmark tables, and appendices)
+
+---
+
 ## Reproduction & Execution Guide
 
 ### Prerequisites
