@@ -175,16 +175,19 @@ class Detector:
         return self._init_capture(source_input)
 
     def _init_model(self, model_path: str) -> tuple[bool, str]:
-        """Loads a YOLO model with dynamic fallback cascade and class mapping resolution."""
+        """Loads a YOLO model (PyTorch or ONNX) with dynamic fallback cascade and class mapping resolution."""
         target_path = str(model_path).strip()
         selected_path = None
         
         if os.path.exists(target_path):
             selected_path = target_path
         else:
-            # Fallback cascade
+            # Fallback cascade: prioritize ONNX high-speed models, then PyTorch, then base
             fallbacks = [
                 settings.MODEL_PATH,
+                "models/onnx_versions_fine_tuned/pediatric-model.onnx",
+                "models/onnx_versions_fine_tuned/pediatric-smaller-dataset-trained.onnx",
+                "models/onnx_versions_fine_tuned/pediatric-kids-only.onnx",
                 "models/fine_tuned/pediatric-model.pt",
                 "models/fine_tuned/pediatric-smaller-dataset-trained.pt",
                 "models/fine_tuned/pediatric-kids-only.pt",
@@ -201,13 +204,35 @@ class Detector:
             selected_path = "yolov8n.pt"
 
         try:
-            logger.info(f"Loading YOLO model weights from {selected_path}")
-            model_instance = YOLO(selected_path)
+            is_onnx = selected_path.lower().endswith(".onnx")
+            if is_onnx:
+                logger.info(f"Loading ONNX model weights from {selected_path} for ONNX Runtime inference")
+                model_instance = YOLO(selected_path, task='detect')
+            else:
+                logger.info(f"Loading PyTorch YOLO model weights from {selected_path}")
+                model_instance = YOLO(selected_path)
             
             with getattr(self, 'model_lock', threading.Lock()):
                 self.model = model_instance
                 self.current_model_path = selected_path
-                self.names = self.model.names
+                self.is_onnx = is_onnx
+
+                names = getattr(self.model, 'names', None)
+                if (not names or len(names) == 0) and is_onnx:
+                    try:
+                        import onnx
+                        import ast
+                        loaded_onnx = onnx.load(selected_path)
+                        props = {p.key: p.value for p in loaded_onnx.metadata_props}
+                        if 'names' in props:
+                            names = ast.literal_eval(props['names'])
+                    except Exception as meta_err:
+                        logger.warning(f"Could not extract metadata class names from ONNX file: {meta_err}")
+
+                if not names:
+                    names = {0: 'person'}
+
+                self.names = names
                 
                 # Dynamic class resolution for fine-tuned and base models
                 found_child = None
@@ -240,13 +265,12 @@ class Detector:
                     self.counter.child_class_id = self.child_class_id
                     self.counter.adult_class_id = self.adult_class_id
 
-
-
                 filename = os.path.basename(selected_path)
                 self.current_model_label = filename
                 
-            logger.info(f"Successfully initialized model '{filename}' (Child Class ID: {self.child_class_id}, Adult Class ID: {self.adult_class_id})")
-            return True, f"Loaded model: {filename}"
+            runtime_tag = "ONNX Runtime" if is_onnx else "PyTorch"
+            logger.info(f"Successfully initialized {runtime_tag} model '{filename}' (Child Class ID: {self.child_class_id}, Adult Class ID: {self.adult_class_id})")
+            return True, f"Loaded model: {filename} ({runtime_tag})"
 
         except Exception as e:
             err_msg = f"Failed to load model from {target_path}: {e}"
@@ -392,7 +416,8 @@ class Detector:
                     if self.uses_coco_person:
                         target_class_id = self.calculate_perspective_class(box, frame_h, raw_class_id, child_cls, adult_cls)
 
-                    if target_class_id in [child_cls, adult_cls] or target_class_id == 0:
+                    valid_classes = [c for c in [child_cls, adult_cls] if c != -1]
+                    if target_class_id in valid_classes or (target_class_id == 0 and len(valid_classes) == 0):
                         resolved_id = self._resolve_track_id(box, raw_track_id, target_class_id, claimed_ids)
                         claimed_ids.add(resolved_id)
                         self.counter.process_detection(resolved_id, target_class_id, box)
@@ -479,7 +504,13 @@ class Detector:
 
         # 3. Label with modern translucent background
         child_cls = getattr(self, 'child_class_id', settings.CHILD_CLASS_ID)
-        class_name = "Child" if class_id == child_cls else "Adult"
+        adult_cls = getattr(self, 'adult_class_id', settings.ADULT_CLASS_ID)
+        if class_id == child_cls and child_cls != -1:
+            class_name = "Child"
+        elif class_id == adult_cls and adult_cls != -1:
+            class_name = "Adult"
+        else:
+            class_name = "Patient"
 
         if class_index is not None:
             label = f"{class_name} #{class_index} [{track_id}]"

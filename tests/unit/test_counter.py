@@ -113,3 +113,16 @@ def test_dynamic_class_mapping(mock_counter):
     assert mock_counter.current_adults == 0
     assert mock_counter.state.total_daily_children == 1
 
+def test_kids_only_single_class_counter_behavior(mock_counter):
+    """Test that Counter correctly handles single-class Kids-Only models where adult_class_id is disabled (-1)."""
+    mock_counter.child_class_id = 0
+    mock_counter.adult_class_id = -1
+    
+    box = (10, 10, 30, 30)
+    mock_counter.process_detection(track_id=1, class_id=0, box=box)
+    
+    assert mock_counter.current_children == 1
+    assert mock_counter.current_adults == 0
+    assert mock_counter.state.total_daily_children == 1
+    assert mock_counter.state.total_daily_adults == 0
+

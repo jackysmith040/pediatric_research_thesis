@@ -64,22 +64,40 @@ settings = Settings()
 
 PRESET_MODELS = [
     {
-        "name": "Fine-Tuned Pediatric Model (Default)",
+        "name": "Fine-Tuned Pediatric Model (ONNX - 2x Fast)",
+        "path": "models/onnx_versions_fine_tuned/pediatric-model.onnx",
+        "type": "onnx_fine_tuned",
+        "description": "High-speed ONNX runtime model for pediatric vs adult classification (2.1x CPU speedup)"
+    },
+    {
+        "name": "Kids-Only Model (ONNX - 2x Fast)",
+        "path": "models/onnx_versions_fine_tuned/pediatric-kids-only.onnx",
+        "type": "onnx_fine_tuned",
+        "description": "High-speed ONNX runtime model focused exclusively on pediatric patient detection"
+    },
+    {
+        "name": "Smaller Dataset Trained Model (ONNX - 2x Fast)",
+        "path": "models/onnx_versions_fine_tuned/pediatric-smaller-dataset-trained.onnx",
+        "type": "onnx_fine_tuned",
+        "description": "High-speed ONNX runtime variant fine-tuned pediatric detection model"
+    },
+    {
+        "name": "Fine-Tuned Pediatric Model (PyTorch)",
         "path": "models/fine_tuned/pediatric-model.pt",
         "type": "fine_tuned",
-        "description": "Full fine-tuned YOLO model for pediatric vs adult classification"
+        "description": "Full fine-tuned PyTorch YOLO model for pediatric vs adult classification"
     },
     {
-        "name": "Kids-Only Pediatric Model",
+        "name": "Kids-Only Pediatric Model (PyTorch)",
         "path": "models/fine_tuned/pediatric-kids-only.pt",
         "type": "fine_tuned",
-        "description": "Fine-tuned model focused exclusively on pediatric patient detection"
+        "description": "Fine-tuned PyTorch model focused exclusively on pediatric patient detection"
     },
     {
-        "name": "Smaller Dataset Trained Model",
+        "name": "Smaller Dataset Trained Model (PyTorch)",
         "path": "models/fine_tuned/pediatric-smaller-dataset-trained.pt",
         "type": "fine_tuned",
-        "description": "Variant fine-tuned pediatric detection model"
+        "description": "Variant fine-tuned PyTorch pediatric detection model"
     },
     {
         "name": "Base YOLO26 Small Model",

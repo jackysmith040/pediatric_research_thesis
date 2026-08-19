@@ -9,3 +9,5 @@ cap_from_youtube
 reportlab
 pytest
 supervision
+onnx
+onnxruntime

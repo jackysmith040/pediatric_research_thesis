@@ -130,13 +130,29 @@ def test_change_model_success(mock_detector, monkeypatch):
     mock_detector.model_lock = threading.Lock()
     mock_model = MagicMock()
     mock_model.names = {0: 'child', 1: 'adult'}
-    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: mock_model)
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda *args, **kwargs: mock_model)
     
     success, msg = mock_detector.change_model("models/fine_tuned/pediatric-model.pt")
     assert success is True
     assert mock_detector.child_class_id == 0
     assert mock_detector.adult_class_id == 1
     assert "pediatric-model.pt" in msg
+    assert "PyTorch" in msg
+
+def test_change_model_onnx_success(mock_detector, monkeypatch):
+    import threading
+    mock_detector.model_lock = threading.Lock()
+    mock_model = MagicMock()
+    mock_model.names = {0: 'child', 1: 'adult'}
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda *args, **kwargs: mock_model)
+    
+    success, msg = mock_detector.change_model("models/onnx_versions_fine_tuned/pediatric-model.onnx")
+    assert success is True
+    assert mock_detector.is_onnx is True
+    assert mock_detector.child_class_id == 0
+    assert mock_detector.adult_class_id == 1
+    assert "pediatric-model.onnx" in msg
+    assert "ONNX Runtime" in msg
 
 def test_perspective_normalization_sitting_pose():
     import numpy as np
@@ -157,7 +173,7 @@ def test_all_preset_models_resolution(mock_detector, monkeypatch):
     # 1. Test Kids-Only Model {0: 'Child'}
     kids_model = MagicMock()
     kids_model.names = {0: 'Child'}
-    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: kids_model)
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda *args, **kwargs: kids_model)
     mock_detector.change_model("models/fine_tuned/pediatric-kids-only.pt")
     assert mock_detector.child_class_id == 0
     assert mock_detector.adult_class_id == -1
@@ -165,7 +181,7 @@ def test_all_preset_models_resolution(mock_detector, monkeypatch):
     # 2. Test Smaller Dataset Trained Model {0: 'Child', 1: 'Adult'}
     variant_model = MagicMock()
     variant_model.names = {0: 'Child', 1: 'Adult'}
-    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: variant_model)
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda *args, **kwargs: variant_model)
     mock_detector.change_model("models/fine_tuned/pediatric-smaller-dataset-trained.pt")
     assert mock_detector.child_class_id == 0
     assert mock_detector.adult_class_id == 1
@@ -173,11 +189,40 @@ def test_all_preset_models_resolution(mock_detector, monkeypatch):
     # 3. Test Base YOLO26 COCO Model {0: 'person', ...}
     coco_model = MagicMock()
     coco_model.names = {0: 'person', 1: 'bicycle', 56: 'chair'}
-    monkeypatch.setattr("src.engine.detector.YOLO", lambda path: coco_model)
+    monkeypatch.setattr("src.engine.detector.YOLO", lambda *args, **kwargs: coco_model)
     mock_detector.change_model("models/base_model/yolo26s.pt")
     assert mock_detector.uses_coco_person is True
     assert mock_detector.child_class_id == settings.CHILD_CLASS_ID
     assert mock_detector.adult_class_id == settings.ADULT_CLASS_ID
+
+def test_onnx_preset_models_in_config():
+    from src.engine.config import PRESET_MODELS
+    paths = [p["path"] for p in PRESET_MODELS]
+    assert "models/onnx_versions_fine_tuned/pediatric-model.onnx" in paths
+    assert "models/onnx_versions_fine_tuned/pediatric-kids-only.onnx" in paths
+    assert "models/onnx_versions_fine_tuned/pediatric-smaller-dataset-trained.onnx" in paths
+
+def test_real_onnx_models_inference_integration():
+    import os
+    import numpy as np
+    from ultralytics import YOLO
+
+    onnx_paths = [
+        "models/onnx_versions_fine_tuned/pediatric-model.onnx",
+        "models/onnx_versions_fine_tuned/pediatric-kids-only.onnx",
+        "models/onnx_versions_fine_tuned/pediatric-smaller-dataset-trained.onnx"
+    ]
+
+    dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    for path in onnx_paths:
+        if os.path.exists(path):
+            model = YOLO(path, task="detect")
+            assert model is not None
+            assert len(model.names) > 0
+            results = model.predict(dummy_frame, imgsz=480, verbose=False)
+            assert results is not None
+            assert len(results) == 1
 
 
 

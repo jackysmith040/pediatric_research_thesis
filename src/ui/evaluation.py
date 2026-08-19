@@ -67,14 +67,17 @@ def register_evaluation(state: TelemetryState, get_detector: Callable[[], Option
 
                                 ui.select(
                                     options={
-                                        'models/fine_tuned/pediatric-model.pt': '🧠 Pediatric Fine-Tuned Model',
-                                        'models/fine_tuned/pediatric-kids-only.pt': '👶 Kids-Only Model',
-                                        'models/fine_tuned/pediatric-smaller-dataset-trained.pt': '🔬 Smaller Dataset Model',
+                                        'models/onnx_versions_fine_tuned/pediatric-model.onnx': '🚀 Pediatric Model (ONNX - 2x Fast)',
+                                        'models/onnx_versions_fine_tuned/pediatric-kids-only.onnx': '👶 Kids-Only Model (ONNX - 2x Fast)',
+                                        'models/onnx_versions_fine_tuned/pediatric-smaller-dataset-trained.onnx': '🔬 Smaller Dataset (ONNX - 2x Fast)',
+                                        'models/fine_tuned/pediatric-model.pt': '🧠 Pediatric Fine-Tuned (PyTorch)',
+                                        'models/fine_tuned/pediatric-kids-only.pt': '👶 Kids-Only Model (PyTorch)',
+                                        'models/fine_tuned/pediatric-smaller-dataset-trained.pt': '🔬 Smaller Dataset Model (PyTorch)',
                                         'models/base_model/yolo26s.pt': '⚡ Base YOLO26 Small Model'
                                     },
                                     value='models/fine_tuned/pediatric-model.pt',
                                     on_change=on_eval_model_change
-                                ).props('dense outlined dark rounded').classes('text-xs bg-slate-950 border-slate-700 min-w-[210px]')
+                                ).props('dense outlined dark rounded').classes('text-xs bg-slate-950 border-slate-700 min-w-[230px]')
 
                                 # Tracker selector dropdown for evaluation lab
                                 async def on_eval_tracker_change(e):

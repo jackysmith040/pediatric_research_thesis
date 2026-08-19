@@ -20,11 +20,15 @@ class Counter:
         
     @property
     def current_adults(self) -> int:
+        if self.adult_class_id == -1:
+            return 0
         active_ids = self.tracker_manager.get_active_ids(max_idle_seconds=1.5)
         return sum(1 for class_id in active_ids.values() if class_id == self.adult_class_id)
 
     @property
     def current_children(self) -> int:
+        if self.child_class_id == -1:
+            return 0
         active_ids = self.tracker_manager.get_active_ids(max_idle_seconds=1.5)
         return sum(1 for class_id in active_ids.values() if class_id == self.child_class_id)
 
@@ -55,9 +59,9 @@ class Counter:
                         break
             
             if not matched:
-                if class_id == self.adult_class_id:
+                if self.adult_class_id != -1 and class_id == self.adult_class_id:
                     self.state.total_daily_adults += 1
-                elif class_id == self.child_class_id:
+                elif self.child_class_id != -1 and class_id == self.child_class_id:
                     self.state.total_daily_children += 1
 
         
