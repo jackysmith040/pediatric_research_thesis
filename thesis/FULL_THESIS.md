@@ -1,7 +1,7 @@
 # The Invisible Child: Pediatric Patient Counting with Foundation Knowledge Distillation, Interactive Object Detection, and Dynamic Multi-Tracking in Clinical Triage Environments
 
 **Academic Context:** Final Year Research Thesis (February 2026)  
-**Author:** Jacky Smith  
+**Authors:** Fafali Dorkunor & Peter Amoah Mensah  
 **Department:** Department of Mathematics, Faculty of Physical and Computational Sciences  
 **Institution:** Kwame Nkrumah University of Science and Technology (KNUST), Kumasi, Ghana  
 **Repository:** [https://github.com/jackysmith040/pediatric_research_thesis.git](https://github.com/jackysmith040/pediatric_research_thesis.git)  

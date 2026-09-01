@@ -3,8 +3,8 @@
 **Thesis Title:**  
 *The Invisible Child: Pediatric Patient Counting with Foundation Knowledge Distillation, Interactive Object Detection, and Dynamic Multi-Tracking in Clinical Triage Environments*
 
-**Candidate:**  
-Jacky Smith
+**Candidates:**  
+Fafali Dorkunor & Peter Amoah Mensah
 
 **Academic Supervisor & Faculty:**  
 Department of Mathematics, Faculty of Physical and Computational Sciences  

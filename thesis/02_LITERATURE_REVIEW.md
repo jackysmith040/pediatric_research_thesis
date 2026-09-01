@@ -10,6 +10,68 @@ While HOG-SVM detectors achieved baseline success in pedestrian detection under 
 
 The advent of Deep Convolutional Neural Networks (CNNs) initiated a paradigm shift in visual object recognition. Modern object detectors automatically learn hierarchical visual representations—ranging from low-level edge and texture primitives in shallow layers to complex semantic concepts (such as human torsos, facial profiles, and carried infants) in deep layers (Krizhevsky et al., 2012; LeCun et al., 2015).
 
+### 2.1.1 Mathematical Foundations of Computer Vision: From Finite Differences to Convolution
+
+To fully appreciate the representational power of modern Deep Convolutional Neural Networks, it is essential to establish the mathematical foundations of classical computer vision, tracing the evolution from continuous calculus to discrete tensor convolution.
+
+**Image Representation (Continuous to Discrete)**
+A physical visual scene is fundamentally a continuous two-dimensional light signal $f(x, y)$. For computational processing, this continuous signal must be sampled and quantized into a discrete mathematical structure. A grayscale image is represented as a matrix $I \in \mathbb{R}^{H \times W}$, where $H$ and $W$ represent height and width, and each element corresponds to an 8-bit quantized intensity value $[0, 255]$. For color images, this extends to a three-dimensional tensor $I \in \mathbb{R}^{H \times W \times 3}$, encoding the Red, Green, and Blue (RGB) color channels. By mapping physical light to discrete integer spaces, the image becomes a purely linear algebra construct, optimized for differential operations.
+
+**The Calculus of Edges**
+In computer vision, an edge corresponds to a spatial region exhibiting rapid intensity variation. In continuous calculus, the rate of change is measured using the 1D derivative:
+
+$$f'(x) = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}$$
+
+Because digital images are discrete pixel grids, the infinitesimally small step $h \to 0$ cannot be achieved. The smallest possible step size is $h = 1$ pixel. Consequently, we approximate the continuous derivative using discrete 2D partial derivatives (finite differences) to compute the horizontal and vertical rates of change:
+
+$$\frac{\partial I}{\partial x} \approx I(x+1, y) - I(x-1, y)$$
+$$\frac{\partial I}{\partial y} \approx I(x, y+1) - I(x, y-1)$$
+
+**Deriving the Sobel Kernel**
+A naive finite difference kernel such as $[-1, 0, 1]$ is highly susceptible to high-frequency image noise. The Sobel operator elegantly combines spatial differentiation with orthogonal smoothing. Mathematically, the horizontal Sobel operator $G_x$ is derived through the outer product of a 1D vertical smoothing vector $S_y$ and a 1D horizontal derivative vector $D_x$:
+
+$$G_x = S_y \otimes D_x = \begin{bmatrix} 1 \\ 2 \\ 1 \end{bmatrix} \begin{bmatrix} -1 & 0 & 1 \end{bmatrix} = \begin{bmatrix} -1 & 0 & 1 \\ -2 & 0 & 2 \\ -1 & 0 & 1 \end{bmatrix}$$
+
+This derivation ensures that $G_x$ extracts horizontal gradients while concurrently applying a localized low-pass Gaussian-like filter vertically to suppress random static. A complementary $G_y$ kernel is derived by transposing the operation to detect vertical gradients.
+
+**Convolution Arithmetic ($I * G_x$)**
+The convolution operator ($*$) applies these discrete kernels across the entire image space. A spatial sliding window mechanism performs element-wise Hadamard multiplication between the kernel and the corresponding image patch, subsequently summing the resulting products into a singular scalar response:
+
+$$S(x, y) = (I * G_x)(x, y) = \sum_{m=-1}^{1} \sum_{n=-1}^{1} I(x-m, y-n) G_x(m, n)$$
+
+A high absolute sum strictly signifies the mathematical presence of a sharp structural edge.
+
+**Gradient Vectors (Magnitude and Direction)**
+Applying both $G_x$ and $G_y$ yields a two-dimensional Gradient Vector $\nabla I$ for every spatial pixel. The structural strength of an edge is captured by the Gradient Magnitude, formulated via the Pythagorean theorem:
+
+$$|G| = \sqrt{G_x^2 + G_y^2}$$
+
+The spatial orientation of the edge, pointing strictly towards the direction of steepest intensity ascent (from dark to light), is computed as the Gradient Angle:
+
+$$\theta = \text{atan2}(G_y, G_x)$$
+
+The two-argument $\text{atan2}$ function is computationally vital, as it captures the full $360^\circ$ angular range based on the coordinate signs of the partial derivatives, a requirement impossible with standard arctangent functions.
+
+**Mathematical Noise Filtering: Gaussian Blurring and NMS**
+To prevent false-positive edge detections triggered by camera sensor static, images undergo 2D Gaussian Blurring prior to differentiation. The continuous Gaussian kernel places maximum statistical weight on the central pixel, decaying exponentially outward:
+
+$$G(x, y) = \frac{1}{2\pi\sigma^2} e^{-\frac{x^2+y^2}{2\sigma^2}}$$
+
+Furthermore, raw gradient magnitudes often produce thick, blurry structural boundaries. To thin these boundaries into precise single-pixel edges, Non-Maximum Suppression (NMS) is applied. NMS mathematically evaluates the gradient magnitude $|G|$ of a pixel along its gradient vector $\theta$. If the pixel is not the absolute local maximum compared to its adjacent neighbors along the vector path, its intensity is forcefully suppressed to $0$.
+
+**Transitioning to Deep Learning**
+The transition from finite differences to Convolutional Neural Networks (CNNs) represents a fundamental shift in mathematical optimization. While classical vision relies on manually derived, fixed-weight kernels (like the Sobel operator), deep CNNs (such as the YOLO architecture) treat the values of convolutional kernels as learnable weights $\mathbf{W}$. These weights are iteratively optimized via backpropagation and stochastic gradient descent to extract highly complex, hierarchical features automatically. 
+
+Once optimal features are mathematically extracted, deep learning reformulates the problem from structural extraction into bounding box coordinate regression. The spatial center coordinates $(t_x, t_y)$ of a predicted pediatric bounding box are bound strictly within the grid cell limits $(0, 1)$ utilizing the logistic Sigmoid activation function:
+
+$$\sigma(x) = \frac{1}{1 + e^{-x}}$$
+
+The final spatial accuracy of these regression coordinates is evaluated by the Intersection over Union (IoU) ratio, determining the precise area of overlap between the predicted bounding box ($B_p$) and the empirical ground truth ($B_g$):
+
+$$\text{IoU} = \frac{\text{Area}(B_p \cap B_g)}{\text{Area}(B_p \cup B_g)}$$
+
+In summation, whether computing explicit outer products to construct a Sobel filter, or optimizing vast tensor weights via backpropagation in YOLO, the entire architecture of computer vision fundamentally rests upon the unified mathematical pillars of linear algebra, differential calculus, and spatial convolution.
+
 ---
 
 ## 2.2 Deep Learning Architectures: Two-Stage vs. Single-Stage Detectors
