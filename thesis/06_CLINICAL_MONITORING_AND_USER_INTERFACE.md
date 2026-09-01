@@ -69,7 +69,7 @@ def is_overcrowded(self) -> bool:
 
 ### 6.2.2 Clinical Alert Propagation
 When `overcrowding_alert` triggers:
-1. **Visual Banner Activation:** The clinical dashboard immediately renders a high-visibility amber/red alert banner (`"WARNING: Pediatric Patient Surge Detected — Escalate Triage Staffing"`).
+1. **Visual Banner Activation:** The clinical dashboard immediately renders a high-visibility amber/red alert banner (`"WARNING: Pediatric Patient Surge Detected: Escalate Triage Staffing"`).
 2. **Badge Morphing:** The pediatric counter card transitions from calm cyan to pulsing alert styling.
 3. **Telemetry Flagging:** The boolean flag is recorded in all downstream CSV and PDF audit logs to document the exact duration of clinical capacity strain.
 
@@ -92,7 +92,7 @@ The system implements a **Dark-Mode Clinical Design System** (`src/ui/components
 │                    CLINICAL DASHBOARD WIREFRAME                         │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ 🏥 THE INVISIBLE CHILD — CLINICAL COMMAND CENTER      [🔴 LIVE]   │  │
+│  │ 🏥 THE INVISIBLE CHILD  -  CLINICAL COMMAND CENTER      [🔴 LIVE]   │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
 │  ┌───────────────────────────────┐  ┌────────────────────────────────┐  │

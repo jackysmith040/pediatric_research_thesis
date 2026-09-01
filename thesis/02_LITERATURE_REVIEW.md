@@ -8,7 +8,7 @@ Computer vision in healthcare surveillance has transitioned from basic backgroun
 
 While HOG-SVM detectors achieved baseline success in pedestrian detection under controlled laboratory environments, they exhibited extreme fragility in real-world clinical waiting rooms. In clinical triage environments, non-rigid body deformations, variable patient sitting postures, severe occlusion from blankets and furniture, and shifting illumination frequently caused severe feature degradation, resulting in prohibitive false-positive and false-negative rates.
 
-The advent of Deep Convolutional Neural Networks (CNNs) initiated a paradigm shift in visual object recognition. Modern object detectors automatically learn hierarchical visual representations—ranging from low-level edge and texture primitives in shallow layers to complex semantic concepts (such as human torsos, facial profiles, and carried infants) in deep layers (Krizhevsky et al., 2012; LeCun et al., 2015).
+The advent of Deep Convolutional Neural Networks (CNNs) initiated a paradigm shift in visual object recognition. Modern object detectors automatically learn hierarchical visual representations, ranging from low-level edge and texture primitives in shallow layers to complex semantic concepts (such as human torsos, facial profiles, and carried infants) in deep layers (Krizhevsky et al., 2012; LeCun et al., 2015).
 
 ### 2.1.1 Mathematical Foundations of Computer Vision: From Finite Differences to Convolution
 
@@ -104,7 +104,7 @@ Deep learning object detection frameworks are broadly categorized into two struc
 ```
 
 ### 2.2.1 Two-Stage Object Detectors
-Two-stage frameworks, epitomized by the R-CNN family—R-CNN (Girshick et al., 2014), Fast R-CNN (Girshick, 2015), Faster R-CNN (Ren et al., 2015), and Mask R-CNN (He et al., 2017)—divide detection into two sequential subtasks:
+Two-stage frameworks, epitomized by the R-CNN family, specifically R-CNN (Girshick et al., 2014), Fast R-CNN (Girshick, 2015), Faster R-CNN (Ren et al., 2015), and Mask R-CNN (He et al., 2017), divide detection into two sequential subtasks:
 1. **Region Proposal Generation:** A Region Proposal Network (RPN) slides over convolutional feature maps to propose candidate regions of interest (RoIs) likely to contain objects.
 2. **Feature Extraction and Classification:** RoI Pooling or RoIAlign extracts fixed-size feature vectors from proposed regions, feeding them into fully connected layers for category classification and bounding box coordinate refinement.
 
@@ -158,7 +158,7 @@ While logit distillation transfers inter-class dark knowledge in classification 
 To guide bounding box localization and fine-grained visual discovery under severe occlusion, **Feature-Based Knowledge Distillation** (Romero et al., 2014, *FitNets*; Zagoruyko & Komodakis, 2017; Tian et al., 2020) aligns intermediate latent activation tensors between the teacher network $\mathcal{M}_T$ and student network $\mathcal{M}_S$.
 
 ### 2.3.2 Self-Supervised Vision Transformers: The DINO Architecture Family
-The **DINO (Self-distillation with no labels)** family—spanning DINO (Caron et al., 2021), DINOv2 (Oquab et al., 2023), and DINOv3 (Meta AI, 2024)—trains Vision Transformers (ViTs) on billions of unlabeled images using a self-supervised student-teacher momentum framework without human class labels.
+The **DINO (Self-distillation with no labels)** family, spanning DINO (Caron et al., 2021), DINOv2 (Oquab et al., 2023), and DINOv3 (Meta AI, 2024), trains Vision Transformers (ViTs) on billions of unlabeled images using a self-supervised student-teacher momentum framework without human class labels.
 
 DINO models partition an input image $I \in \mathbb{R}^{H \times W \times 3}$ into a grid of non-overlapping patches $p \in \mathbb{R}^{N \times (P^2 \cdot C)}$ (where $P=14$ or $16$), processing them through multi-head self-attention layers:
 
@@ -323,7 +323,7 @@ $$\mathbf{v}_{\text{child}}^{(t)} = (1 - \gamma)\mathbf{v}_{\text{child}}^{(t)} 
 
 ## 2.6 Illumination Normalization & Contrast Enhancement in Computer Vision
 
-Clinical emergency waiting rooms frequently exhibit suboptimal lighting conditions—ranging from harsh overhead fluorescent glare to dim night-shift ambient illumination. In poorly lit environments, pixel intensity histograms become compressed into narrow low-value ranges, degrading edge gradients and causing convolutional kernels to miss faint infant body contours.
+Clinical emergency waiting rooms frequently exhibit suboptimal lighting conditions, ranging from harsh overhead fluorescent glare to dim night-shift ambient illumination. In poorly lit environments, pixel intensity histograms become compressed into narrow low-value ranges, degrading edge gradients and causing convolutional kernels to miss faint infant body contours.
 
 ### 2.6.1 Global Histogram Equalization (GHE) vs. CLAHE
 Standard Global Histogram Equalization (GHE) flattens the global image histogram by applying a monotonic mapping derived from the Cumulative Distribution Function (CDF):
@@ -407,7 +407,7 @@ Deploying artificial intelligence in clinical environments requires strict adher
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Edge computing—executing deep learning inference directly on local on-premise hardware—ensures that raw patient video streams never leave the local clinical network boundary. This eliminates data leakage vulnerabilities and guarantees continuous operational autonomy even during complete hospital internet outages.
+Edge computing, defined as executing deep learning inference directly on local on-premise hardware, ensures that raw patient video streams never leave the local clinical network boundary. This eliminates data leakage vulnerabilities and guarantees continuous operational autonomy even during complete hospital internet outages.
 
 ---
 

@@ -10,7 +10,7 @@
 
 ## Abstract
 
-In resource-constrained hospital emergency departments (EDs) and outpatient triage facilities, infant and pediatric mortality is heavily exacerbated by prolonged, unmonitored waiting room delays. In such high-stress clinical environments, manual triage logs and visual headcounts consistently fail to account for the **"Invisible Child" phenomenon**—infants wrapped in swaddling cloths, carried against caregivers' torsos, or occluded in crowded waiting areas. As a consequence, pediatric patient load is systematically underestimated, leading to severe nursing shortages, delayed critical interventions, and preventable pediatric decompensation.
+In resource-constrained hospital emergency departments (EDs) and outpatient triage facilities, infant and pediatric mortality is heavily exacerbated by prolonged, unmonitored waiting room delays. In such high-stress clinical environments, manual triage logs and visual headcounts consistently fail to account for the **"Invisible Child" phenomenon**, wherein infants are wrapped in swaddling cloths, carried against caregivers' torsos, or occluded in crowded waiting areas. As a consequence, pediatric patient load is systematically underestimated, leading to severe nursing shortages, delayed critical interventions, and preventable pediatric decompensation.
 
 To resolve this critical healthcare challenge, this research designs, develops, mathematically models, and validates a real-time, edge-deployed clinical computer vision system. The system combines **Dense Feature Representation Distillation from Vision Foundation Models (DINOv3 ViT $\to$ YOLO26s Student)** and **Slicing Aided Hyper Inference (SAHI)** with an adaptive **Multi-Tracker Suite** (incorporating **ByteTrack**, **BoT-SORT**, **OC-SORT**, and **FastTracker with Parent-Child ID Anchoring**) into a unified, zero-network-serialization Python monolith powered by NiceGUI.
 
@@ -114,7 +114,7 @@ Consolidates the Computer Vision Engine, Multi-Tracker Suite, Telemetry Model, a
 - **Stage 2:** Supervised pediatric fine-tuning (30 epochs, SGD, CIoU + DFL + BCE loss).
 
 ### 4.2 ONNX Runtime CPU Acceleration
-Reduces CPU execution latency from **59.8 ms** (PyTorch FP32) to **28.4 ms**—a **2.1x speedup**.
+Reduces CPU execution latency from **59.8 ms** (PyTorch FP32) to **28.4 ms, achieving a 2.1x speedup**.
 
 ---
 

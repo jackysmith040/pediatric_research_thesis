@@ -6,7 +6,7 @@
 
 This thesis addressed a critical and pervasive failure mode in emergency healthcare informatics: the **"Invisible Child" phenomenon**, wherein carried, occluded, or lethargic pediatric patients in crowded hospital waiting halls are overlooked by manual triage headcounts, leading to severe pediatric triage delays and preventable mortality.
 
-To overcome this clinical crisis, this research designed, mathematically formulated, implemented, and empirically validated **The Invisible Child: Pediatric Monitor**—a real-time, edge-deployed computer vision and dynamic multi-tracking system powered by **Vision Foundation Knowledge Distillation (DINOv3 $\to$ YOLO26s)** and **Slicing Aided Hyper Inference (SAHI)**.
+To overcome this clinical crisis, this research designed, mathematically formulated, implemented, and empirically validated **The Invisible Child: Pediatric Monitor, a real-time, edge-deployed computer vision and dynamic multi-tracking system powered by **Vision Foundation Knowledge Distillation (DINOv3 $\to$ YOLO26s)** and **Slicing Aided Hyper Inference (SAHI)**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐

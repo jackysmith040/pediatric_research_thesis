@@ -4,7 +4,7 @@
 
 ## 5.1 The Multi-Tracker Suite Architecture
 
-In hospital triage waiting rooms, patient movement patterns are highly diverse—ranging from stationary seated individuals and slow-moving elderly caregivers to rapidly pacing parents and sudden camera vibrations. A single static tracking algorithm cannot excel across all dynamic conditions:
+In hospital triage waiting rooms, patient movement patterns are highly diverse, ranging from stationary seated individuals and slow-moving elderly caregivers to rapidly pacing parents and sudden camera vibrations. A single static tracking algorithm cannot excel across all dynamic conditions:
 - Standard **ByteTrack** excels in stable, low-motion environments with high computational efficiency.
 - **BoT-SORT** provides camera motion compensation during camera pan/tilt adjustments or vibration.
 - **OC-SORT** provides non-linear trajectory recovery when patients change walking direction erratically.
