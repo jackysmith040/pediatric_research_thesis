@@ -61,3 +61,17 @@ Thumbs.db
 *.mov
 src/assets/*.mp4
 
+# LaTeX Build Files
+*.aux
+*.bbl
+*.blg
+*.lof
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.idx
+*.ilg
+*.ind
